@@ -3,6 +3,18 @@
 # C extensions
 *.so
 
+# latex from .w
+*.aux
+*.dvi
+*.log
+*.tex
+*.toc
+
+# vi
+*~
+*.swp
+
+
 # Packages
 *.egg
 *.egg-info
