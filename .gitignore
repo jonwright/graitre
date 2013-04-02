@@ -9,6 +9,7 @@
 *.log
 *.tex
 *.toc
+*.pdf
 
 # vi
 *~
