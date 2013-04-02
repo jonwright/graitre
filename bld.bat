@@ -1,3 +1,3 @@
 
-nuweb graitre.w
-latex graitre.w
+nuweb graitre
+pdflatex graitre
