@@ -279,7 +279,7 @@ Then the rotation can be re-written as:
 
 \[ \Psi = \Psi_{parallel} + \Psi_{plane}\cos\psi + \Psi_{perp}\sin\psi \]
 
-\includegraphics[width=8cm]{ decompose.png }
+\includegraphics[width=8cm]{decompose}
 
 For a rotation axis which has normalised direction $(l,m,n)$ these 
 three matrices are:
@@ -356,7 +356,7 @@ The solution is therefore found from:
 
 This is rougly the same thing as from gv\_general.py in ImageD11.
 We can convert it to the form:
-\[ (A \sin{x} + B \cos{x} = C \sin{x+\delta} \]
+\[ A \sin{x} + B \cos{x} = C \sin{x+\delta} \]
 where $ C = \sqrt{ A^2 + B^2 } $ and $\sin{\delta} = B/C $ and 
 $\cos{\delta} = A/C$. 
 This is most easily proved by substitution and expansion of the formulas,
@@ -385,190 +385,16 @@ to trig functions, but only a square root.
 @{
 nuweb graitre
 pdflatex graitre
+bibtex graitre
+pdflatex graitre
+pdflatex graitre
 @}
 
 
-\section{ Literature }
 
-Angle Calculations for 3- and 4- Circle X-ray and Neutron Diffractometers
-W. R. Busing and H. A Levy.
-Acta Cryst (1967) 22, 457.
-
-
-On the refinements of the Crystal Orientation Matrix and Lattice
-Constants with Diffractometer Data.
-D. P. Shoemaker an G. Basi.
-Acta Cryst (1970) A26, 97.
-
-A least squares method for the determination of the orientation matrix
-in single-crystal diffractometry.
-K. Tichy.
-Acta Cryst (1970) A26, 296.
-
-The Indexing of Single-Crystal X-ray Rotation Photographs.
-J. R. Milch and T. C. Minor.
-J. Appl. Cryst. (1974) 7, 502.
-
-Intensity Determination by Profile Fitting Applied to Precession 
-Photographs.
-G. C. Ford.
-J. Appl. Cryst (1974) 7, 555.
-
-
-A Pattern-Recognition Procedure for Scanning Oscillation Films
-W. Kabsch.
-J. Appl. Cryst (1977) 10, 426.
-
-The Oscillation Method for Crystals with Very Large Unit Cells.
-F. K. Winkler, C. E. Schutt and S. C. Harrison.
-Acta Cryst (1979) A35, 901.
-
-Diffractometry of Closely Superimposed Twins and Clusters: A
-Method and a Program for Establishing UB Matrices of Single
-Crystal Individuals.
-K. Tichy and J. Benes.
-J. Appl. Cryst (1979) 12, 10.
-
-Processing Oscillation Diffraction Data for Very Large Unit
-Cells with and Automatic Convolution Technique and Profile Fitting.
-M. G. Rossman.
-J. Appl. Cryst (1979) 12 225.
-
-Processing and Post-Refinement of Oscillation Camera Data.
-M. G. Rossman, A. G. W. Leslie, S. S. Abdel-Meguid and T. Tsukihara.
-J. Appl. Cryst (1979) 12, 570.
-
-A Useful Algorithm in Lattice Geometry.
-D. J. Thomas
-Acta Cryst (1981) A37, 553.
-
-A Computer Program For Refinement of Crystal Orientation Matrix
-and Lattice Constants from Diffractometer Data with Lattice 
-Symmetry Constraints.
-R. L. Ralph and L. W. Finger.
-J. Appl. Cryst (1982) 15 537.
-
-Orientation Matrix Refinement During Four-Circle Diffractometer
-Data Collection.
-W. Clegg.
-Acta Cryst (1984) A40 703.
-
-Enhancements of the "Auto-Indexing" Method for Cell Determination
-in Four-Circle Diffractometry.
-W. Clegg.
-J. Appl. Cryst (1984) 17 334.
-
-Some Geometrical Problems Related to the Rotation Camera. I. X-ray
-Diffraction Pattern Generation.
-D. Taupin.
-J. Appl. Cryst (1985) 18 253.
-
-Some Geometrical Problems Related to the Rotation Camera. II. 
-Dimensions of Integration Domains for Intensity Measurements.
-C. Zelwer and D. Taupin.
-J. Appl. Cryst (1985) 18 436.
-
-Post-Refinement of Oscillation Diffraction Data Collected at a
-Synchrotron Radiation Source.
-G. Vriend, M. G. Rossmann, E. Arnold, M. Lu, J. P. Griffith and 
-K. Moffat.
-J. Appl. Cryst (1986) 19, 143.
-
-Automatic Indexing of Rotation Diffraction Patterns.
-W. Kabsch.
-J. Appl. Cryst (1988) 21, 67.
-
-Evaluation of Single-Crystal X-ray Diffraction Data from a 
-Position-Sensitive Detector.
-W. Kabsch.
-J. Appl. Cryst (1988) 21, 916.
-
-Auto-indexing Oscillation Photographs
-S. Kim
-J. Appl. Cryst (1989) 22 53.
-
-
-
-
-Modern Equations of Diffractometry. Goniometry.
-D. J. Thomas.
-Acta Cryst (1990) A46, 321.
-
-Linear Least Squares Adjustment of UB Matrix Elements and the
-Prediction of Reflection Positions.
-C. Wilkinson.
-J. Appl. Cryst (1990) 23, 111.
-
-Auto-indexing of Oscillation Images
-T. Higashi
-J. Appl. Cryst (1990) 23, 253.
-
-A Simplex Optimization Method for the Precise Determination
-of Symmetry Constrained Lattice Constants from Diffractometer Data.
-J. B. Weinrach and D. W. Bennett.
-J. Appl. Cryst (1991) 24 91.
-
-
-Modern Equations of Diffractometry. Diffraction Geometry.
-D. J. Thomas.
-Acta Cryst (1992) A48, 134.
-
-Accurate Determination of Strain Tensors from Small Shifts of 
-Reflections Measured on a Four-Circle Diffractometer.
-H. Graafsma.
-J. Appl. Cryst. (1992) 25 372.
-
-
-Modern Equations of Diffractometry. Profile Generation.
-D. J. Thomas.
-Acta Cryst (1993) A49, 446.
-
-Automatic Processing of Rotation Diffraction Data from Crystals
-of Initially Unknown Symmetry and Cell Constants.
-W. Kabsch.
-J. Appl. Cryst (1993) 26, 795.
-
-The 'Seed-Skewness' Method for Integration of Peaks on Imaging Plates.
-R. Bolotovsky, M. A. White, A. Darovsky and P. Coppens.
-J. Appl. Cryst (1995) 28, 86.
-
-On the geometry of the modern imaging diffractometer.
-W. A. Paciorek, M. Meyer and G. Chapuis.
-Acta Cryst (1999) A55, 543.
-
-
-The 'seed-skewness' integration method generalized for 
-three-dimensional Bragg peaks.
-J. Peters.
-J. Appl. Cryst (2003) 36 1475.
-
-Matrix-Free integration of image-plate diffraction data.
-R. Muller and G. Roth.
-J. Appl. Cryst (2005) 38 280.
-
-Angle Calculations for a three-circle goniostat.
-G. Thorkildsen, H. B. Larsen and J. A. Beukes.
-J. Appl. Cryst (2006) 39 151.
-
-XDS
-W. Kabsch
-Acta Cryst (2010) D66, 125.
-
-Integration, Scaling, Space-group Assigment and post-refinement.
-W. Kabsch.
-Acta Cryst (2010) D66, 133.
-
-
-Angle Calculations for a (2+3)-type diffractometer: 
-focus on area detectors.
-C. M. Schleputz, S. O. Mariager, S. A. Pauli, R. Fiedenhans'I
-and P. R. Willmott.
-J. Appl. Cryst (2011) 44 73.
-
-
-Vectors and Tensors in Crystallography.
-D. E. Sands.
-Dover ISBN 0-486-68505-5.
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{graitre}
 
 
 \end{document}

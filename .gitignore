@@ -10,6 +10,9 @@
 *.tex
 *.toc
 *.pdf
+*.bbl
+*.blg
+
 
 # vi
 *~
