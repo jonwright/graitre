@@ -72,7 +72,8 @@ we see that $ \begin{pmatrix} g_0 & g_1 & g_2 \end{pmatrix} =
 \begin{pmatrix} ub_0 & ub_1 & ub_2 \end{pmatrix} $.
 Thus a simple indexing algorithm involves picking three non-coplanar
 difference vectors out of your data and writing down the 
-orientation matrix. 
+orientation matrix $UB$ as rows. 
+
 
 Habitually in the ImageD11 software we provided the UBI matrix, which
 is the matrix inverse of UB. 
@@ -98,7 +99,7 @@ You will notice there has been and interchange of row and column
 vectors at this point.
 In the ImageD11 code for indexing unknown cells this interchange
 caused a great deal of confusion.
-The concept of a row and column vectors as being "different" things
+The concept of a row and column vectors as being ``different'' things
 is difficult.
 
 This matrix corresponds to the reciprocal space lattice vectors
@@ -109,6 +110,11 @@ $\mathbf{a_i}$ be the real space unit cell vectors.
 
 \[ \left[ \mathbf{g_0 g_1 g_2} \right]^T =   
    \left[ \mathbf{a_0 a_1 a_2} \right]^{-1} \]   
+
+or, these are indeed rows as above, after the transpose:
+
+\[ \begin{pmatrix} g_0 \\ g_1 \\ g_2 \end{pmatrix}=  
+     \left[ \mathbf{a_0 a_1 a_2} \right]^{-1} \]   
 
 or:
 
@@ -121,7 +127,7 @@ or:
 The row and column aspects remain confusing, as in software we currently
 do not make a distinction between row and column vectors. 
 
-We need to relate A and G to UB and UBI properly.
+We need to relate A and G to UB and UBI properly: there is an extra transpose.
 
 
 \subsection{Finding the angle of diffraction}
@@ -279,8 +285,10 @@ Then the rotation can be re-written as:
 
 \[ \Psi = \Psi_{parallel} + \Psi_{plane}\cos\psi + \Psi_{perp}\sin\psi \]
 
+\begin{figure}
 \includegraphics[width=8cm]{decompose}
-
+\caption{Reproduced from Thomas (1990, Goniometry)}
+\end{figure}
 For a rotation axis which has normalised direction $(l,m,n)$ these 
 three matrices are:
 \begin{math}
@@ -304,8 +312,8 @@ three matrices are:
     \end{pmatrix}
 \end{math}
 
-These are labelled with subscript $p$ for "parallel", $c$ for cosine component
-and $s$ for sin component. Thus,
+These are labelled with subscript $p$ for ``parallel'', $c$ for ``cosine'' component
+and $s$ for ``sin'' component. Thus,
 
 \begin{math}
  \Psi =
@@ -332,7 +340,7 @@ If we return to our problem of solving that equation we now find
 that everything is in terms matrices where we know all of the element
 values and the only unknown is $\psi$. 
 This solves the question of a general rotation axis. Amazing.
-The derivative with respect to angle is also made abundantly clear.
+The derivative with respect to angle is also easier to find.
 
 If we now consider the diffractometer as being a stack of rotations
 we run into confusion.
@@ -356,23 +364,146 @@ The solution is therefore found from:
 
 This is rougly the same thing as from gv\_general.py in ImageD11.
 We can convert it to the form:
-\[ A \sin{x} + B \cos{x} = C \sin{x+\delta} \]
+\[ A \sin{x} + B \cos{x} = C \sin{(x+\delta)} \]
 where $ C = \sqrt{ A^2 + B^2 } $ and $\sin{\delta} = B/C $ and 
 $\cos{\delta} = A/C$. 
 This is most easily proved by substitution and expansion of the formulas,
 google knows various pages that work through it.
 
 Thomas goes further in (1992, Diffraction Geometry) in deriving a 
-form of the final wavevector in component form without resorting
+form of the final wavevector ($R$) in component form without resorting
 to trig functions, but only a square root.
 
 
 
-
 \subsection{Finding the point where a ray intersects a plane}
+\label{rayplane}
+Thomas (1992, Diffraction Geometry) invites us to consider the
+matrix:
+
+\[ \mathbf{d} = \left[ d^Y d^Z d^O \right] =
+    \begin{pmatrix} 
+            d_x^Y & d_x^Z & d_x^O \\
+            d_y^Y & d_y^Z & d_y^O \\
+            d_z^Y & d_z^Z & d_z^O
+    \end{pmatrix} \]
+
+The $Y$ and $Z$ correspond to the pixel directions in the detector
+and the vector and $O$ is a vector from the origin (perhaps in the sample) 
+to the point on the detector that we consider to be the origin.
+Note that we do not require these vectors to be perpendicular, also
+we do not need that $O$ is parallel to the beam.
+
+The matrix of co-vectors is given by $\mathbf{dD = I}$:
+
+\[ \mathbf{D} = \begin{pmatrix} ^YD \\ ^ZD \\ ^OD \end{pmatrix} =
+    \begin{pmatrix} 
+            ^YD_x & ^YD_y & ^YD_z \\
+            ^ZD_x & ^ZD_y & ^ZD_z \\
+            ^PD_x & ^PD_y & ^PD_z
+    \end{pmatrix} \]
+
+A scattered ray is given by:
+
+\[ \begin{pmatrix} d^Y & d^Z & d^O \end{pmatrix}
+   \begin{pmatrix} Q^Y \\ Q^Z \\ 1 \end{pmatrix} = \alpha \mathbf{R} \]
+
+Here $\alpha$ is a constant of proportionality with dimensions of area. 
+It is something like the conversion from millimeters to reciprocal
+space angstroms.
+Solving for $Q^Y$ and $Q^Z$ is then a simple matter of using $D$
+and removing $\alpha$.
+
+
+\[ \begin{pmatrix} Q^Y \\ Q^Z \\ 1 \end{pmatrix} = \alpha \mathbf{D.R} \]
+
+\[ \begin{pmatrix} Q^Y \\ Q^Z \\ 1 \end{pmatrix} = \alpha 
+    \begin{pmatrix} 
+            ^YD_x & ^YD_y & ^YD_z \\
+            ^ZD_x & ^ZD_y & ^ZD_z \\
+            ^PD_x & ^PD_y & ^PD_z
+    \end{pmatrix}
+    \begin{pmatrix} R_x \\ R_y \\ R_z  \end{pmatrix}
+ \]
+
+This expands to give 3 equations for each of our rows:
+
+\[ Q^Y = \alpha \left( {^Y}D_x R_x + {^Y}D_y R_y + {^Y}D_z R_z \right) \]
+\[ Q^Z = \alpha \left( {^Z}D_x R_x + {^Z}D_y R_y + {^Z}D_z R_z \right)\]
+\[ Q^P = \alpha \left( {^P}D_x R_x + {^P}D_y R_y + {^P}D_z R_z \right) = 1 \]
+
+We use the last one to solve for alpha and back substitute that into
+the others:
+
+\[ Q^I = \frac{ {^I}D_x R_x + {^I}D_y R_y + {^I}D_z R_z } 
+              { {^P}D_x R_x + {^P}D_y R_y + {^P}D_z R_z }  \]
+...for $I$ is $Y$ or $Z$.
+
+Cool.
+
 
 \section{Computing from the data towards the model}
 
+This was the approach taken in ImageD11 in the past. 
+It seems to be relatively straightforward to keep that code
+compatible with anything new here.
+
+\section{Putting this into code}
+
+Our aim is to fit our diffractometer geometry.
+This can be in terms of the extracted peak positions from a 
+peak search of a stack of images.
+This can also be in terms of a point spread function and the 
+individual pixel intensities in the images.
+
+Eventually we need our code to be robust and well tested and 
+reasonably efficient. 
+We would like to be able to call it on a graphics card inside
+an OpenCL kernel, from the C language and from python.
+
+\subsection{Experiment descriptions}
+
+In fable the geometry is pretty much hard wired into the software.
+
+In programs like XDS a more general description is available.
+
+We want to write a fable (ImageD11) geometry description in a way 
+that will work with the old code and allow new instrument definitions
+and also be pretty fast.
+
+\subsubsection{Detectors}
+
+The output of peaksearch is the peak positions in the pixel slow and fast
+directions and also the observed omega angles. 
+The instrument ``parameters'' are a flip matrix, the beam center (2) in pixel
+co-ordinates, the pixel sizes (2), the detector tilts (3) and the 
+sample to detector distance (1).
+This makes a total of 8 parameters with the problem of things blowing up
+if the detector is on a two theta arm.
+
+Some equivalent description could be made, perhaps adding in a detector
+two theta arm (horizontal or vertical).
+
+Eventually we should write these parameters into a matrix description 
+as in section \ref{rayplane}.
+
+For refinement it seems we need something like a parameter list,
+a function converting that list to a single matrix and
+a another function giving derivatives of the matrix elements
+with respect to each parameter.
+
+
+
+
+
+
+
+Rotation axis requires minimum of 3 direction cosines.
+
+Build a stack of rotations to represent diffractometer.
+
+Apply rotations to incident beam and UB to reduce to single
+axis form.
 
 
 \section{Examples}
