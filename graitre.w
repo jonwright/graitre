@@ -448,6 +448,47 @@ This was the approach taken in ImageD11 in the past.
 It seems to be relatively straightforward to keep that code
 compatible with anything new here.
 
+\section{Combining translations with the other parameters}
+
+The laboratory co-ordinates can be computed from the detector position.
+
+The grain position is computed from the translation.
+
+We can consider the vector from grain to detector in either the frame
+of reference of the detector or the diffractometer.
+
+In the detector frame we have the vector:
+
+\[ dX = L + \Omega T \]
+
+where $dX$ is the vector from grain to detector, $L$ are the lab co-ordinates
+on the detector plane and $\Omega$ is the rotation of the diffractometer.
+
+The scattering vector, $k$, is 
+\[ k = \left( dX/|dX| - s_0 \right) / \lambda \]
+
+The g-vector, in the crystal frame, is then rotated back:
+
+\[ g = \Omega^{-1} k = \Omega^{-1} \left( dX/|dX| - s_0 \right) / \lambda \]
+
+
+\[ \lambda g = \Omega^{-1}dX/|dX| - \Omega^{-1} s_0  \]
+
+We substitute for $dX$ and $g = UB.h$:
+
+\[ \lambda g = \lambda UB.h = \Omega^{-1}( L + \Omega T ) /|dX| - \Omega^{-1} s_0  \]
+
+\[ \lambda |dX| UB.h = \Omega^{-1} L + T - \Omega^{-1} |dX| s_0  \]
+
+\[ T = \lambda |dX| UB.h - \Omega^{-1} L + \Omega^{-1} |dX| s_0  \]
+
+So we see there is a scale factor, per reflection, relating laboratory
+co-ordinates to reciprocal angstroms, $ \lambda |dX| $.
+
+This equations suggests we can compute $T$ in a single step as the reciprocal
+space origin, possibly cycling a couple of times to take account of the effect
+of $T$ on $dX$.
+
 \section{Putting this into code}
 
 Our aim is to fit our diffractometer geometry.
