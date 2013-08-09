@@ -8,6 +8,7 @@
 \documentclass[11pt,notitlepage]{article}
 \usepackage{amsmath}
 \usepackage{graphicx}
+
 \usepackage[margin=2cm,a4paper]{geometry}
 
 \begin{document}
@@ -334,7 +335,6 @@ def wwm_move(_pos)'{
  A[WWM_MOTOR_N]=_pos
  move_em
  _update(WWM_MOTOR)
- 
 }'
 
 def wwm_scan '{
@@ -343,6 +343,7 @@ def wwm_scan '{
 
 
 }'
+
 def _wwm_scan(start, end, nstep, ctime)'{ 
  global WWM_MOTOR WWM_MOTOR_N
  local totaltime totalsteps velocity stime nfilt 
@@ -772,6 +773,7 @@ crippled.
 @{
 import math, numpy as np
 from ImageD11 import unitcell, gv_general, transform
+from ImageD11 import connectedpixels
 @}
 
 
@@ -786,6 +788,15 @@ def angmod(x):
 def angmoddeg(x):
     """ Angle mod 360, degrees """
     return np.degrees(angmod(np.radians(x)))
+
+def abscosdeg(x):
+    """ Absolute cosine of angle in degrees """
+    return np.abs(np.cos(np.radians(x)))
+
+def abssindeg(x):
+    """ Absolution sin of angle in degrees """
+    return np.abs(np.sin(np.radians(x)))
+
 @}
 
 
@@ -814,6 +825,235 @@ Collect together all the little functions etc into one place for now:
 
 In the future we might want to split this into a no-dependency
 version.
+
+\subsection{Reading the experimental data}
+
+The format is (unfortunately) defined in the wwm\_save spec
+macro, which is not really ideal. 
+In the near future we should save the diode dark offsets and 
+full scale values in headers or a calibration file.
+
+
+@d readspc
+@{
+
+def readspc(fname):
+    """ minimalist spec file reading """
+    scans = []
+    data  = []
+    coltitles = []
+    for line in open(fname).xreadlines():
+        if line[0:2] == "#S":
+            if len(data)>0:
+                scans.append(np.array(data))
+                data = []
+            continue
+        if line[0:2] == "#L":
+            titles = line[2:].split("  ")
+            nvals = len(titles)
+	    coltitles.append(titles)
+            continue
+        if line[0] == "#":
+            continue
+        vals = line.split()
+        if len(vals) == nvals:
+            data.append( [float(v) for v in vals] )
+    if len(data)>0:
+        scans.append(np.array(data))
+    return scans, coltitles
+
+class spcreader(object):
+    def __init__(self, fname):
+        self.fname = fname
+        self.scans, self.coltitles = readspc( fname ) 
+
+@}
+
+\subsection{ Experimental calibration, determination of $\mu$ }
+
+In the ideal case the diodes and electrometers should be calibrated
+to know the dark current and intensity when there is no crystal in 
+the beam.
+If this is not done we can try to figure out some values from the 
+data.
+In the test experiments scans were done where the rotation
+axis was moved out of the beam, so we see the direct beam 
+intensity and can measure it.
+We also measured with the shutter closed to get the 
+diode offset values.
+The absolute X-ray flux can be determined from the diode
+values via the method in Owen et al (2008).
+
+Using the Beer-Lambert law the intensity transmitted will be:
+
+\[    I = I_0 \exp{(-\mu l)} \]
+
+...where $l$ is the path length through the wafer. 
+The effective thickness of the wafer when it rotates is given by:
+
+\[ l = \frac{t}{|\sin{(\phi+\phi_0)}|} \]
+
+...where we have defined the zero angle to be where the wafer
+is parallel to the beam.
+If we take logs of the Beer-Lambert law and insert the equation
+for $l$ and rearrange we get:
+
+\[  |\sin{\phi+\phi_0}| (\log{I_0} - \log{I}) = \mu t   \]
+
+Potential problems arise here if we do not have the true 
+value for $I$, the intensity, but instead we measure some
+number which is related to $I$ via a scale factor (gain) and
+offset (dark current):
+
+\[ I = s(V-V_d) \]
+
+...where $s$ is a scale factor and $V, V_d$ are the output voltages
+measured with and without the X-ray beam.
+
+
+\[   \frac{I}{I_0} = \exp{(-\mu l)} =
+   \frac{s(V-V_d)}{s_0(V_0-V_{0d})} \]
+
+\[   \log{I_0} - \log{I} = \frac{\mu t}{|\sin{(\phi+\phi_0)}|} =
+ \log{(s_0(V_0-V_{0d}))} - \log{(s(V-V_d))}  \]
+
+\[ \frac{\mu t}{|\sin{(\phi+\phi_0)}|} = \log{(V_0/V)} + \log{(s_0/s)} + 
+   	     \log{(1-V_{0d}/V_0)} - \log{(1-V_d/V))}  \]
+
+Taking $log(1+x)=x$ when $x$ is small and writing $S=\log{(s_0/s)}$ gives:
+
+\[ \frac{\mu t}{|\sin{(\phi+\phi_0)}|} ~= \log{(V_0/V)} + S - V_{0d}/V_0 - V_d/V  \]
+
+\[ \frac{\mu t}{|\sin{(\phi+\phi_0)}|} ~= 
+   \log{(V_0/V)} + S - \frac{ V_{0d}+V_d }{V_0V}  \]
+
+We should check numerically, but it looks like the term in the dark currents
+is likely to be much smaller than all the others.
+So on a plot of $1/|sin{(\phi+\phi_0)}|$ we should have gradient $\mu t$ and 
+intercept close to $S = \log{(s_0/s)}$.
+If the $phi_0$ value is not correct there is a strong difference between
+the $\mu t$ values for different parts of the scan and this is a 
+non-linear effect. 
+
+We need a little fitting program which takes the data and fits $\phi_0$ and
+the scale factors.
+Stepwise you can get a first guess of $\mu t$ from the gradients and adjust the
+small angle regions to match by varying $\phi_0$.
+
+It looks like a plot of the variation from the linear fit gives a 
+straight line when plotted as:
+\begin{verbatim}
+plot(sign(tan(radians(msa)))*x, (y-np.polyval(p,x))/x,",")
+\end{verbatim}
+This should allow the zero angle to be determined.
+
+Probably this just needs some least squares parameter fitting?
+
+FIXME: XXX: Clean this out to go directly to the answer below
+
+For the determination of $V_0$ and the relative dark currents 
+we can also look at the noise in a measurement where the angle does not 
+change.
+Assuming there is some variation in the input signal (eg, measure a rocking
+curve, open the shutter, whatever) then we should find:
+
+\[   \frac{I}{I_0} = \exp{(-\mu l)} = constant =
+   \frac{s(V-V_d)}{s_0(V_0-V_{0d})} \]
+
+\[   V = kV_0 - (V_{0d} + V_d/k) \]
+
+If the dark current ($V_0$) is small we might approximate this via the log
+identity $\log{(a+b)} = \log{(a(1+b/a))} = \log(a) + \log(1+b/a)$.
+When $a>>b$ this is approximately $\log(a)+b/a$, so that:
+
+???
+
+By fitting this variation to a straight line we can extract the constant
+$k$ and the offset $o = V_{0d} + V_d/k$ (so that  $ok - k.V_{0d} = V_d$).
+
+
+We expand the equation for transmission in terms of the measured signals
+to get:
+\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}+\log{s_0}-\log{(V-V_d)}-\log{s})
+    = \mu t   \]
+
+We see what this will be in terms of our experimental $k$ and offset
+from above which were measured at a specific angle $\phi_k$:
+\[   k = \exp(-\mu l) \frac{s_0}{s} \]
+\[   k = \exp(- \frac{\mu t}{|\sin{\phi_k+\phi_0}|}) \frac{s_0}{s} \]
+\[   \log{k} +  \frac{\mu t}{|\sin{\phi_k+\phi_0}|} =  \log{s_0}-\log{s} \]
+
+We put this into the equation to get:
+
+\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-\log{(V-V_d)} + \log{k} + 
+    \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
+
+And use the offset (the terms $o$ and $k$ is known):
+
+\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-\log{(V- ok - k.V_{0d})} + \log{k} + 
+    \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
+
+\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-
+\log{(k (V/k- o - V_{0d}))} + \log{k} +
+     \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
+
+\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-
+    \log{(V/k - o - V_{0d})}  +
+     \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
+
+We will call the "corrected" voltage $ V/k-o=V_k$:
+
+\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-
+    \log{(V_k - V_{0d})}  +
+     \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
+
+\[  |\sin{\phi+\phi_0}| (\log{V_0/V_k} - \log{(1-V_{0d}/V_0)}-
+    \log{(1 - V_{0d}/V_k)}  +
+     \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
+
+FIXME: XXX: Clean this out to go directly to the answer here
+
+If we plot $\log{(V_0/V_k)}$ versus $1/|\sin(\phi+phi_0)|$ then
+we should have a straight line with gradient $\mu t$ and 
+intercept which picks up a lot of the crap above.
+
+This trial has an "ang" definition which puts the zero at 90 degrees, anyway:
+
+\begin{verbatim}
+plot( 1/(abscosd(ang[::10])), 
+      log( data[120400::10,3])-log(data[120400::10,2]),",")
+ylim(0,1.5)
+xlim(0,40)
+title("wwm_42kev/wwm_42kev_0.0016.spc")
+xlabel("1/|sin(phi+phi0)|")
+ylabel("log(Vmonitor)-log(Vsignal)")
+\end{verbatim}
+
+This is plotted on figure~\ref{fig:muplot} on page~\pageref{fig:muplot}. 
+It is clearly linear for a wide range of angles, up to the point where
+the beam starts to overspill at the sides of the wafer.
+
+If the $\phi_0$ value is not well determined we will get quite different
+gradients in the different quadrants of 
+
+\begin{figure}[tb]
+\label{fig:muplot}
+\includegraphics[width=\textwidth]{determine_mu}
+\caption{ By measuring the gradient from this plot we can determine
+the instrumental constants relating to diode efficiency and $\mu t$.}
+\end{figure}
+
+We note experimentally that fitting is mostly sensitive to the 
+$\phi_0$ at angles near where the wafer is parallel to the beam, eg, 
+near 0 and 180 degrees when $\sin{\phi}$ is also small.
+We will assume that the offset angle $\phi_0$ that we are trying to 
+correct is small.
+In an iterative procedure this will eventually become true as the 
+algorithm converges.
+Expanding $\sin(\phi+\phi_0) = \sin{\phi}\cos{\phi_0} + \cos{\phi}\sin{\phi_0}$
+
+
+
 
 
 \subsection{ Programs }
@@ -880,5 +1120,173 @@ J. Appl. Cryst. (1974) 7, 502
 Fable geometry document...
 
 Bond (196?)
+
+Determination of X-ray flux using silicon pin diodes
+R. L. Owen, J. M. Holton, C. Shulze-Briese and E. F. Garman.
+J. Synch. Rad. (2008) 16, 143-151.
+
+\section{ Smoothing code from the net }
+
+This comes from the scipy wiki (link please!)
+
+@d savitzky
+@{
+def savitzky_golay(y, window_size, order, deriv=0, rate=1):
+    r"""Smooth (and optionally differentiate) data with a Savitzky-Golay filter.
+    The Savitzky-Golay filter removes high frequency noise from data.
+    It has the advantage of preserving the original shape and
+    features of the signal better than other types of filtering
+    approaches, such as moving averages techniques.
+    Parameters
+    ----------
+    y : array_like, shape (N,)
+        the values of the time history of the signal.
+    window_size : int
+        the length of the window. Must be an odd integer number.
+    order : int
+        the order of the polynomial used in the filtering.
+        Must be less then `window_size` - 1.
+    deriv: int
+        the order of the derivative to compute (default = 0 means only smoothing)
+    Returns
+    -------
+    ys : ndarray, shape (N)
+        the smoothed signal (or it's n-th derivative).
+    Notes
+    -----
+    The Savitzky-Golay is a type of low-pass filter, particularly
+    suited for smoothing noisy data. The main idea behind this
+    approach is to make for each point a least-square fit with a
+    polynomial of high order over a odd-sized window centered at
+    the point.
+    Examples
+    --------
+    t = np.linspace(-4, 4, 500)
+    y = np.exp( -t**2 ) + np.random.normal(0, 0.05, t.shape)
+    ysg = savitzky_golay(y, window_size=31, order=4)
+    import matplotlib.pyplot as plt
+    plt.plot(t, y, label='Noisy signal')
+    plt.plot(t, np.exp(-t**2), 'k', lw=1.5, label='Original signal')
+    plt.plot(t, ysg, 'r', label='Filtered signal')
+    plt.legend()
+    plt.show()
+    References
+    ----------
+    .. [1] A. Savitzky, M. J. E. Golay, Smoothing and Differentiation of
+       Data by Simplified Least Squares Procedures. Analytical
+       Chemistry, 1964, 36 (8), pp 1627-1639.
+    .. [2] Numerical Recipes 3rd Edition: The Art of Scientific Computing
+       W.H. Press, S.A. Teukolsky, W.T. Vetterling, B.P. Flannery
+       Cambridge University Press ISBN-13: 9780521880688
+    """
+    import numpy as np
+    from math import factorial
+
+    try:
+        window_size = np.abs(np.int(window_size))
+        order = np.abs(np.int(order))
+    except ValueError, msg:
+        raise ValueError("window_size and order have to be of type int")
+    if window_size % 2 != 1 or window_size < 1:
+        raise TypeError("window_size size must be a positive odd number")
+    if window_size < order + 2:
+        raise TypeError("window_size is too small for the polynomials order")
+    order_range = range(order+1)
+    half_window = (window_size -1) // 2
+    # precompute coefficients
+    b = np.mat([[k**i for i in order_range] for k in range(-half_window, half_window+1)])
+    m = np.linalg.pinv(b).A[deriv] * rate**deriv * factorial(deriv)
+    # pad the signal at the extremes with
+    # values taken from the signal itself
+    firstvals = y[0] - np.abs( y[1:half_window+1][::-1] - y[0] )
+    lastvals = y[-1] + np.abs(y[-half_window-1:-1][::-1] - y[-1])
+    y = np.concatenate((firstvals, y, lastvals))
+    return np.convolve( m[::-1], y, mode='valid')
+@}
+
+\section{ Unsorted codes }
+
+@d unsorted
+@{
+def makesig(ret):
+    """
+    ret = readspc("wwm_42kev/wwm_42kev_0.0016.spc")
+    t = transmitted
+    m = monitor
+    t0 = dark current transmitted (no beam)
+    m0 = dark current monitor (no beam) 
+    ts = transmitted scale factor (no xtal)
+    ms = monitor scale factor (no xtal)
+    """
+    t = ret[:,2]
+    m = ret[:,3]
+    t0= t[:50000].mean()
+    ts = (t-t0)[90000:98000].mean()
+    m0 = m[:50000].mean()
+    ms = (m-m0)[90000:98000].mean()
+    ascale = 160000.0
+    a = ret[:,1]/ascale
+    a0 = 0.88
+    sclean = -np.log(((t-t0)*ms/(m-m0)/ts)[120400:])*abscosd(a[120400:]-a0)
+    return a[120400:]-a0,sclean
+
+def find_peaks( ang, sig, npxmin = 10 ):
+    """
+    Find connected groups of pixels...
+    """
+    from ImageD11.connectedpixels import blobproperties, connectedpixels,\
+        blob_moments, s_1, s_I, mx_I
+    import numpy as np
+    # median is the background
+    sm = np.median(sig)
+    # sigma level
+    st = sig.std()
+    # norman is our normalised array, 2D, nx1 for peaksearching
+    norman = ((sig - sm)/st).astype(np.float32)
+    anorman = (ang*norman).astype(np.float32)
+    norman.shape = norman.shape[0],1
+    anorman.shape = anorman.shape[0],1
+    # label array
+    b = np.zeros( norman.shape, np.int)
+    print b.shape
+    npks = connectedpixels( norman, b, 1.0, 0 )
+    print npks
+    #
+    sig_pks = blobproperties( norman, b, npks, 0)
+    # we want:
+    #  width
+    allwidth = sig_pks[:,s_1]
+    # Filter out anything with less than npxmin pixels
+    msk = allwidth >= npxmin
+    widths = np.compress( msk, allwidth)
+    #  centroid in angle (sum ints*a / sum(ints)
+    print npks
+    ang_pks = blobproperties( anorman , b, npks, 0)
+    centroids = np.compress( msk, ang_pks[:,s_I]/sig_pks[:,s_I])
+    #  area or height ?
+    areas = np.compress( msk, sig_pks[:,s_I]*st )
+    heights = np.compress( msk, sig_pks[:,mx_I]*st )
+    return centroids, areas, widths, heights
+    
+
+if __name__=="__main__":
+    data = readspc("wwm_42kev/wwm_42kev_0.0016.spc")
+    ang,sig = makesig(data)
+    c,a,w,h = find_peaks( ang, sig)
+
+    order = np.argsort(-h)
+
+    c[order[:8]]
+#Out[150]: 
+#array([ 147.47907659,   38.00419486,  -32.52035246, -141.99559782,
+#       -147.3868076 ,  142.08722053,   32.6130885 ,  -37.91206404])
+#UBI:
+#5.29317363 -0.0905953467 -0.0683694637
+#-0.00740113112 3.77238274 -3.81213226
+#0.100616448 3.71563154 3.88134886
+
+
+@}
+
 
 \end{document}
