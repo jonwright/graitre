@@ -13,7 +13,7 @@
 
 \begin{document}
 
-\title{WWM : Wafer Wavelength Monitor}
+\title{WWM : Wafer Wavelength Monitor, collected notes}
 \author{Jon Wright}
 \date{Summer 2013}
 \maketitle
@@ -21,7 +21,7 @@
 \begin{abstract}
 This is the complete documentation package for the wavelength wafer 
 monitor project.
-A silicon wafer is scanned in angle the direct beam and the transmission 
+A silicon wafer is scanned in angle in the direct beam and the transmission 
 is recorded.
 Code for the data collection is included here.
 Whenever diffraction occurs an extinction peak is observed, and the
@@ -46,6 +46,687 @@ from the data some processing is required. The following steps are identified:
 \item Assignment of hkl indices to the peaks
 \item Refinement of the geometry (3 orientation, one axis tilt, one wavelength)
 \end{itemize}
+
+
+\section{Some scattered notes on extinction diffraction}
+
+We are concerned by the overall length of the diffraction vector and
+the projection of this perpendicular to the rotation axis.
+For a single peak we can observe both $g$ and $-g$ as they each cross the
+two sides of the Ewald sphere (from the inside to the outside and the 
+reverse).
+From these four observations we will find peaks at $\phi$ and
+$\phi+180$ when the rotation axis is perpendicular to the beam.
+If there is a beam tilt then there is an offset which depends on the azimuthal
+angle of the reflection.
+The difference in angle between two Friedel pairs gives us a single 
+observation to constrain the length and axis projection (two unknowns).
+If the length is known from having the hkl indices, cell parameter
+and wavelength then we can determine the projection on the axis.
+
+If we tweak the wavelength we change the length of the scattering vector 
+but keep the same direction cosines. 
+This tells us the sign of the solution in the square root equation as the
+peaks shift either to lower or higher angles. 
+
+Example data from 65 and 65.1keV show this in action (figure please FIXME).
+Peaks shift by their width (about 100 eV) either to positive or negative.
+Looks like some Freidel pairs get closer together in angle, some further apart.
+None of them look like staying where they are...
+
+There is a flick up on a tail of the peak sometimes (figure please).
+Currently this is interpreted as a dynamical diffraction effect.
+For the beam going directly through the crystal there is the usual 
+absorbtion along the path.
+If the wafer is at a grazing angle the diffracted beam can exit
+on the opposite surface with a much smaller path length.
+When this diffracted beam diffracts again it will have found a "short cut"
+through the crystal.
+To compute the peakshape for this properly we should look into what is 
+going on inside the Bormann fan. 
+(An interim solution is to avoid using such peaks).
+
+There is also the anomalous transmission effect, when the standing 
+wave inside the crystal avoids the atomic positions (see  Batterman and
+Cole, 1964). 
+To quantify these various effects we should compute the actual values 
+of $\mu t$ as a function of energy and also figure out what are 
+the Pendelossung periods etc.
+
+
+
+\section{Axis tilt alignment procedure}
+
+If a tilt is installed under the axis measure a pair of sharp peaks at 
+0 and 180 degrees.
+Plot the separation of these peaks (-180) versus the tilt angle.
+When the axis is perpendicular to the beam the peaks will be 180 degrees 
+apart.
+Example scan data were collected, for 0,1,2,3 degrees these are:
+\begin{verbatim}
+lid112:/data/id11/crystallography/jon/june13/wwm_35kev
+total 358740
+-rw-r--r--  1 opid11 id11  1119343 Jul 30 19:10 junk.spc
+-rw-r--r--  1 opid11 id11 66398182 Jul 30 15:32 wwm_35kev.spc
+-rw-r--r--  1 opid11 id11 10885993 Jul 30 16:09 wwm_42kev_miome.spc
+-rw-r--r--  1 opid11 id11 70560495 Jul 30 17:10 wwm_42kev_miome_hry.spc
+-rw-r--r--  1 opid11 id11 70579160 Jul 30 17:31 wwm_42kev_miome_hry1.spc
+-rw-r--r--  1 opid11 id11 70574330 Jul 30 17:48 wwm_42kev_miome_hry2.spc
+-rw-r--r--  1 opid11 id11 70540335 Jul 30 19:04 wwm_42kev_miome_hry3.spc
+-rw-r--r--  1 opid11 id11  5200492 Jul 30 16:47 wwm_42kev_miome_speed.spc
+
+lid112:/data/id11/crystallography/jon/june13 % 
+grep "#[OP]3" wwm_energies/wwm_hry_align_proc.spc/wwm_hry_align_proc.spc.spc 
+#O3     tabx      taby    eurosp     cdtez   berger1     HrotY      s6vg      s6vo
+#P3 3.051758e-07 0 600 -46.22 0  0   0.70000016 1.2903226e-07
+#P3 3.051758e-07 0 600 -46.22 0  0   0.70000016 1.2903226e-07
+#P3 3.051758e-07 0 600 -46.22 0  0.1 0.70000016 1.2903226e-07
+#P3 3.051758e-07 0 600 -46.22 0  0.1 0.70000016 1.2903226e-07
+#P3 3.051758e-07 0 600 -46.22 0 -0.1 0.70000016 1.2903226e-07
+#P3 3.051758e-07 0 600 -46.22 0 -0.1 0.70000016 1.2903226e-07
+#P3 3.051758e-07 0 600 -46.22 0 -0.063194444 0.70000016 1.2903226e-07
+#P3 3.051758e-07 0 600 -46.22 0 -0.063194444 0.70000016 1.2903226e-07
+
+
+lid112:/data/id11/crystallography/jon/june13 % more ~opid11/hry.dat 
+0.0 0.02234
+0.1 0.058066
+-0.1 -0.013028
+
+\end{verbatim}
+
+
+\section{Thoughts on indexing crystals}
+
+For the wavelength monitor we can just assume the crystal
+orientation is known.
+In practice one can read off the positions of the (111) reflections
+as the strongest ones in the pattern anyway for a silicon wafer.
+
+Nevertheless it is interesting to think about how to deal with an
+unknown unit cell and to determine the orientation.
+
+If the rotation is on a tilt stage and we can tilt the axis
+with respect to the beam and the reflections shift according to their
+azimuthal position. 
+This should offer a way to get the (sin of) the azimuth angle.
+
+If we tweak the wavelength the reflections generally shift 
+either to higher or lower angles. 
+This tells us whether the reflection crosses into or out of the
+Ewald sphere as the rotation axis moves.
+It also should tell us which direction to look in to find the 
+Friedel pair.
+
+The width of the peaks, at ID11, tells us the glancing angle
+between the reflection and the thickness of the Ewald sphere 
+for that reflection.
+This depends on the bandpass and beam divergence as well as the
+glancing angle. 
+
+By combining several of the pieces of information 
+one can presumably find orientation matrices in simple cases. 
+Due to the symmetry of the experiment it is not clear whether
+a solution is unique...
+
+
+\section{Theory}
+
+There is a nice derivation of the angle of diffraction in the 
+rotation method in Milch and Minor (1974).
+This is also something like the Bond method (ref). 
+We reproduce the Milch and Minor story
+with the notation changed to be more similar to fable/ImageD11.
+The condition for diffraction is:
+
+\[ \mathbf{| s_0 + k | = |s_0| } \]
+
+Here $\mathbf{s_0}$ is the incident wave-vector and $\mathbf{k}$ is the 
+crystal lattice vector at the moment when the diffraction occurs.
+This equation just says the incident momentum is the same as the scattered.
+
+\[ \mathbf{| s_0 + k |^2 = |s_0|^2 } \]
+\[ \mathbf{ |s_0|^2 + 2s_0.k + |k|^2 - |s_0|^2 = 0}  \]
+\[ \mathbf{  |k|^2 + 2s_0.k} = 0 \]
+
+Once the hkl is assigned to the peak then $\mathbf{|k|^2 = |g|^2}$ is a 
+constant which does not depend on rotations ($\mathbf{g}$ is the crystal
+lattice vector prior to rotation to the diffraction condition).
+
+We define a co-ordinate system where the rotation axis defines z and the 
+beam is incoming roughly along x in the x-z plane.
+This follows Milch and Minor (1974) but exchanges labels to approximately 
+follow the fable convention (REF) with a key difference; 
+\emph{the z axis is parallel to the rotation axis and units make 
+$\mathbf{|s_0|}=1$}.
+During the experiment the component of the vector along the rotation axis,
+$g_z$, does not change, so that the rotated vector component 
+$k_z$ is also constant.
+
+Ideally, if the beam is perpendicular to the axis, then it will be along x.
+Otherwise we have:
+
+\[ \mathbf{s_0 = s_{0x} + s_{0z}}\]
+
+...where since $ \mathbf{s_0} = 1 $ we can figure out that 
+ $ s_{0x} = \sqrt{ 1 - s^2_{0z}}$.  
+If we put these equations together we get:
+
+\[\mathbf{  |k|^2 + 2(s_{0x} + s_{0z}).(k_x + k_y + k_z) = 0 } \]
+
+Due to the choice of co-ordinate system and use of orthogonal axes 
+only the xx, yy and zz terms from the dot product can be non-zero:
+
+\[ \mathbf{ |k|^2 + 2 s_{0x}.k_x + 2 s_{0z}.k_z = 0 } \]
+\[ \mathbf{ 2 s_{0x}.k_x = - |k|^2 - 2 s_{0z}.k_z } \]
+\[ \mathbf{ k_x = - \frac{|k|^2 - 2 s_{0z}.k_z }{ 2 s_{0x}}} \]
+\[ \mathbf{ k_x = - \frac{|k|^2 - 2 s_{0z}.k_z }{ 2 \sqrt{1-s^2_{0z}}}} \]
+...via the choice of z along rotation axis then...:
+\[ \mathbf{ k_x = - \frac{|g|^2 - 2 s_{0z}.g_z }{ 2 \sqrt{1-s^2_{0z}}}} \]
+
+If the orientation matrix and beam direction are known we are able to 
+compute the g-vector and ${s0z}$ and we can compute $k_x$.
+
+Should someone take the time to carefully align the axis to be exactly
+perpendicular to the beam then the $s_{0z}$ is zero and this reduces to:
+
+\[ \mathbf{ k_x = -\frac{|g|^2}{2}} \]
+
+Since the component along the axis is constant, $\mathbf{k_z=g_z}$, 
+then we can get the
+$\mathbf{k_y}$ component from $k_y=\pm \sqrt{|k|^2-k_x^2-k_z^2}$.
+
+There are generally two positions of $\mathbf{k}$ where the diffraction 
+can happen, corresponding to $\pm\mathbf{k_y}$.
+We find these by solving the goniometer equation:
+
+\[ k_x = g_x \cos{\phi} - g_y \sin{\phi} \]
+
+Re-write this in terms of a some different quantities to make it possible
+to solve for the angle. 
+We use the length of the vector in the $xy$ plane, $g_{xy}$ and the angle
+$\theta$:
+\[g_{xy} = \sqrt{g_x^2+g_y^2};   \theta = \arctan{ g_y/g_x } \]
+\[g_{x} = g_{xy}\cos{\theta}; g_y = g_{xy}\sin{\theta} \]
+\[ k_x = g_{xy}\cos{\theta}\cos{\phi} - g_{xy}\sin{\theta}\sin{\phi} \]
+\[ k_x = g_{xy}\cos{( \theta+\phi ) } \]
+\[ \cos{(\theta+\phi)} = -\mathbf{ \frac{|g|^2 - 2 s_{0z}g_z }
+     { 2  \sqrt{g_x^2+g_y^2} \sqrt{1-s_{0z}^2 }}} \]
+
+Finally:
+
+\[ \phi = \arccos{ \left[ -\frac{|g|^2 - 2 s_{0z}.g_z }
+ { 2 g_{xy} \sqrt{1-s^2_{0z}}}\right]} - \arctan{ g_y/g_x } \]
+
+There are two solutions for the inverse cosine for arguments
+inside the range -1 to 1, 
+no solutions outside the range and a single solution for $\pm 1$.
+
+\subsection{Computing all this with derivatives}
+
+We assume an initial orientation matrix is known and that we want to refine
+orientation updates, the wavelength and axis tilt.
+We write our crystal scattering vector as:
+
+\[ \mathbf{c = U.B.h } \]
+
+Going to the units for $g$ for this document means also multiplying 
+by the wavelength, $\lambda$:
+
+\[ \mathbf{g} = \lambda \mathbf{ U.B.h } \]
+
+We need the derivative of $\mathbf{g}$ with respect to small orientation
+changes, which we can choose to make on our $x,y,z$ axes.
+After the small change, for example $r_z$ about $z$ we have:
+
+\[ \mathbf{g} = (g_x\cos{r_z} + g_y\sin{r_z})\mathbf{i} +
+   	        (-g_x\sin{r_z} + g_y\cos{r_z})\mathbf{j} +
+		g_z\mathbf{k} \]
+\[ \frac{d\mathbf{g}}{dr_z} = 
+   (-g_x\sin{r_z} + g_y\cos{r_z})\mathbf{i} +
+   (-g_x\cos{r_z} - g_y\sin{r_z})\mathbf{j} \]
+
+We evaluate this at $r_z=0$ to obtain:
+
+\[ \frac{d\mathbf{g}}{dr_z} = g_y.\mathbf{i} - g_x.\mathbf{j} + 0.\mathbf{k} \]
+
+...which is just the vector $[g_y,-g_x,0]$. 
+The same can be done for each of the three axes. 
+These are just the cross products between the g-vector the three
+basis vectors.
+
+For the derivative with respect to the wavelength we have:
+
+\[\frac{d \mathbf{g}}{d\lambda} = \mathbf{ U.B.h } = 
+  \frac{\mathbf{g}}{\lambda} \]
+
+For the derivatives of $|g|^2$, just $2\times$ a dot of the derivative 
+with the original vector:
+
+\[ \frac{ \partial{\mathbf{|g|^2}} }{ \partial x } = 
+   \frac{ \partial{\mathbf{u.v}} }{ \partial x } = 
+   \frac{ \partial{\mathbf{u^T v}} }{ \partial x } = 
+   \frac{ \partial{\mathbf{u}} }{ \partial x }\mathbf{v} + 
+   \frac{ \partial{\mathbf{v}} }{ \partial x }\mathbf{u} = 
+   2 \frac{ \partial{\mathbf{g}} }{ \partial x }.\mathbf{g} 
+ \]
+
+For the derivatives of the inverse cosine and tangent terms we have:
+
+\[ \frac{ \partial atan2(y,x) } { \partial x } = 
+   \frac{ \partial \arctan(y/x) } { \partial x } = 
+   - \frac{ y } { x^2 + y^2 } \]
+\[ \frac{ \partial atan2(y,x) } { \partial y } = 
+   \frac{ \partial \arctan(y/x) } { \partial y } = 
+   \frac{ x } { x^2 + y^2 } \]
+\[ \frac{ \partial \arccos(x) } { \partial x } = 
+   -\frac{1}{ \sqrt{1-x^2} } \]
+
+This should be enough mathematics to put together a fitting program.
+The discontinuity at certain angles might be an issue. 
+Since we work with a wafer we can design the program to place the 
+problem at angles where there is no diffraction,
+Our internal zero angle, and cut point should be close to the 
+plane of the wafer to avoid this problem.
+
+
+\subsection{ Experimental calibration, determination of $\mu$ }
+
+In the ideal case the diodes and electrometers should be calibrated
+to know the dark current and intensity when there is no crystal in 
+the beam.
+If this is not done we can try to figure out some values from the 
+data.
+In the test experiments scans were done where the rotation
+axis was moved out of the beam, so we see the direct beam 
+intensity and can measure it.
+We also measured with the shutter closed to get the 
+diode offset values.
+The absolute X-ray flux can be determined from the diode
+values via the method in Owen et al (2008).
+
+Using the Beer-Lambert law the intensity transmitted will be:
+
+\[    I = I_0 \exp{(-\mu l)} \]
+
+...where $l$ is the path length through the wafer. 
+The effective thickness of the wafer when it rotates is given by:
+
+\[ l = \frac{t}{|\sin{(\phi+\phi_0)}|} \]
+
+...where we have defined the zero angle to be where the wafer
+is parallel to the beam.
+If we take logs of the Beer-Lambert law and insert the equation
+for $l$ and rearrange we get:
+
+\[  |\sin{\phi+\phi_0}| (\log{I_0} - \log{I}) = \mu t   \]
+
+Potential problems arise here if we do not have the true 
+value for $I$, the intensity, but instead we measure some
+number which is related to $I$ via a scale factor (gain) and
+offset (dark current):
+
+\[ I = s(V-V_d) \]
+
+...where $s$ is a scale factor and $V, V_d$ are the output voltages
+measured with and without the X-ray beam.
+
+
+\[   \frac{I}{I_0} = \exp{(-\mu l)} =
+   \frac{s(V-V_d)}{s_0(V_0-V_{0d})} \]
+
+\[   \log{I_0} - \log{I} = \frac{\mu t}{|\sin{(\phi+\phi_0)}|} =
+ \log{(s_0(V_0-V_{0d}))} - \log{(s(V-V_d))}  \]
+
+\[ \frac{\mu t}{|\sin{(\phi+\phi_0)}|} = \log{(V_0/V)} + \log{(s_0/s)} + 
+   	     \log{(1-V_{0d}/V_0)} - \log{(1-V_d/V))}  \]
+
+Taking $log(1+x)=x$ when $x$ is small and writing $S=\log{(s_0/s)}$ gives:
+
+\[ \frac{\mu t}{|\sin{(\phi+\phi_0)}|} ~= \log{(V_0/V)} + S - V_{0d}/V_0 - V_d/V  \]
+
+\[ \frac{\mu t}{|\sin{(\phi+\phi_0)}|} ~= 
+   \log{(V_0/V)} + S - \frac{ V_{0d}+V_d }{V_0V}  \]
+
+We should check numerically, but it looks like the term in the dark currents
+is likely to be much smaller than all the others.
+So on a plot of $1/|sin{(\phi+\phi_0)}|$ we should have gradient $\mu t$ and 
+intercept close to $S = \log{(s_0/s)}$.
+If the $phi_0$ value is not correct there is a strong difference between
+the $\mu t$ values for different parts of the scan and this is a 
+non-linear effect. 
+
+We need a little fitting program which takes the data and fits $\phi_0$ and
+the scale factors.
+Stepwise you can get a first guess of $\mu t$ from the gradients and adjust the
+small angle regions to match by varying $\phi_0$.
+
+It looks like a plot of the variation from the linear fit gives a 
+straight line when plotted as:
+\begin{verbatim}
+plot(sign(tan(radians(msa)))*x, (y-np.polyval(p,x))/x,",")
+\end{verbatim}
+This should allow the zero angle to be determined.
+
+Probably this just needs some least squares parameter fitting?
+
+If we plot $\log{(V_0/V_k)}$ versus $1/|\sin(\phi+phi_0)|$ then
+we should have a straight line with gradient $\mu t$ and 
+intercept which picks up a lot of the crap above.
+
+This trial has an "ang" definition which puts the zero at 90 degrees, anyway:
+
+\begin{verbatim}
+plot( 1/(abscosd(ang[::10])), 
+      log( data[120400::10,3])-log(data[120400::10,2]),",")
+ylim(0,1.5)
+xlim(0,40)
+title("wwm_42kev/wwm_42kev_0.0016.spc")
+xlabel("1/|sin(phi+phi0)|")
+ylabel("log(Vmonitor)-log(Vsignal)")
+\end{verbatim}
+
+This is plotted on figure~\ref{fig:muplot} on page~\pageref{fig:muplot}. 
+It is clearly linear for a wide range of angles, up to the point where
+the beam starts to overspill at the sides of the wafer.
+
+If the $\phi_0$ value is not well determined we will get quite different
+gradients in the different quadrants of 
+
+\begin{figure}[tb]
+\label{fig:muplot}
+\includegraphics[width=\textwidth]{determine_mu}
+\caption{ By measuring the gradient from this plot we can determine
+the instrumental constants relating to diode efficiency and $\mu t$.}
+\end{figure}
+
+We note experimentally that fitting is mostly sensitive to the 
+$\phi_0$ at angles near where the wafer is parallel to the beam, eg, 
+near 0 and 180 degrees when $\sin{\phi}$ is also small.
+We will assume that the offset angle $\phi_0$ that we are trying to 
+correct is small.
+In an iterative procedure this will eventually become true as the 
+algorithm converges.
+Expanding $\sin(\phi+\phi_0) = \sin{\phi}\cos{\phi_0} + \cos{\phi}\sin{\phi_0}$
+
+
+
+
+\section{Fitting software}
+
+The fitting code will be benchmarked against ImageD11 in the case of 
+having no axis tilt. 
+Following the easy maintenance of id31sum in comparison to anything
+else the author has ever written, we try for a similar programming
+style here.
+That is to say all the modules are in the section in this nuweb 
+document and the entire programs will be derived from this 
+single file, probably as large single files themselves. 
+
+In terms of overall structure we have a couple of approaches. 
+We can correct the raw data and extract peak positions, then 
+do a fit again the extracted positions.
+This approach should be the first step.
+Having gotten that working we can also do a fit against 
+the raw data, Rietveld style, using the parameters determined.
+
+This breaks up into several distinct steps.
+First we take the raw data and find out the mu and wafer zero 
+offset by fitting the absorbtion. 
+Then we extract the peak positions, widths and heights.
+Then we fit the positions and assign hkl indices.
+Then we can go back into the data with a more complete hkl list.
+
+@subsection{General coding stuff}
+
+First the module imports. 
+As this list grows so the distribution of the software is gradually
+crippled.
+
+@d imports
+@{
+import math, numpy as np, json, pprint
+from ImageD11 import unitcell, gv_general, transform
+from ImageD11 import connectedpixels
+@}
+
+
+Some little utility scripts for angle mods etc.
+
+@d utilities
+@{
+def angmod(x): 
+    """ Angle mod 360, radians """
+    return np.arctan2( np.sin(x), np.cos(x))
+
+def angmoddeg(x):
+    """ Angle mod 360, degrees """
+    return np.degrees(angmod(np.radians(x)))
+
+def abscosdeg(x):
+    """ Absolute cosine of angle in degrees """
+    return np.abs(np.cos(np.radians(x)))
+
+def abssindeg(x):
+    """ Absolution sin of angle in degrees """
+    return np.abs(np.sin(np.radians(x)))
+
+@}
+
+
+We will want some sort of description of a peak. 
+This could be a python object, or the list of values to expect
+in a C struct, or something else. 
+For the moment we used connectedpixels from ImageD11 and this 
+was set up to return arrays of centroids, areas, widths and 
+heights.
+
+
+
+
+
+
+Collect together all the little functions etc into one place for now:
+
+@d wwmfunctions
+@{
+@< imports @>
+@< utilities @>
+@< generatehkls @>
+@}
+
+In the future we might want to split this into a no-dependency
+version.
+
+\subsection{Reading the experimental data}
+
+The format is (unfortunately) defined in the wwm\_save spec
+macro, which is not really ideal. 
+In the near future we should save the diode dark offsets and 
+full scale values in headers or a calibration file.
+
+
+@d readspc
+@{
+
+def readspc(fname):
+    """ minimalist spec file reading """
+    scans = []
+    data  = []
+    coltitles = []
+    for line in open(fname).xreadlines():
+        if line[0:2] == "#S":
+            if len(data)>0:
+                scans.append(np.array(data))
+                data = []
+            continue
+        if line[0:2] == "#L":
+            titles = line[2:].split("  ")
+            nvals = len(titles)
+	    coltitles.append(titles)
+            continue
+        if line[0] == "#":
+            continue
+        vals = line.split()
+        if len(vals) == nvals:
+            data.append( [float(v) for v in vals] )
+    if len(data)>0:
+        scans.append(np.array(data))
+    return scans, coltitles
+
+class spcreader(object):
+    def __init__(self, fname):
+        self.fname = fname
+        self.scans, self.coltitles = readspc( fname ) 
+
+@}
+
+
+\subsection{ Getting the signal from the raw data }
+
+We need to define some experimental parameters.
+We use a simple python dictionary and wrap this into
+an object giving load and save capability.
+
+@d parameters
+@{
+wwmpars = {
+    'darkMonit' : 0.0,
+    'darkTrans' : 0.0,
+    'scaleMonit' : 1.0,
+    'scaleTrans' : 1.0,
+    'angleScale' : 160000.0,
+    'angleZero'  : 0.0
+    }
+
+
+class WWMparameters(object):
+    def __init__(self, **pars):
+        self.__dict__.update(pars)
+    def save(self, filename):
+        open(filename,"w").write( 
+            json.dumps( self.__dict__,
+            sort_keys=True,
+            indent = 4,
+            separators = (",",": " ))
+        )
+    def load(self, filename):
+        d = json.loads(open(filename,"r").read())
+        self.__dict__.update( d )
+    def __str__(self):
+        return str(self.__dict__)
+@}
+
+This little script checks we can load and save parameters
+into a json file (ascii representation of a dict).
+
+@O partest.py
+@{
+@<imports@>
+@<parameters@>
+
+if __name__=="__main__":
+    p = WWMparameters( **wwmpars )
+    print str(p)
+    p.save("testpars.json")
+    p.load("testpars.json")
+    print str(p)
+@}
+
+Assuming we have read in one or several spec files we need to 
+fit them to extract the $\mu t$ and wafer zero angle.
+
+@d makesig
+@{
+def makesig(scan, titles):
+    """
+    ret = readspc("wwm_42kev/wwm_42kev_0.0016.spc")
+    t = transmitted
+    m = monitor
+    t0 = dark current transmitted (no beam)
+    m0 = dark current monitor (no beam) 
+    ts = transmitted scale factor (no xtal)
+    ms = monitor scale factor (no xtal)
+    """
+    t = scan[:,titles.index('CH5')]
+    m = scan[:,titles.index('CH6')]
+    t0= t[:50000].mean()
+    ts = (t-t0)[90000:98000].mean()
+    m0 = m[:50000].mean()
+    ms = (m-m0)[90000:98000].mean()
+    ascale = 160000.0
+    a = ret[:,1]/ascale
+    a0 = 0.88
+    sclean = -np.log(((t-t0)*ms/(m-m0)/ts)[120400:])*abscosd(a[120400:]-a0)
+    return a[120400:]-a0,sclean
+@}
+
+
+
+\subsection{ Programs }
+
+
+
+We generate idealised data with a (semi-) random orientation matrix
+and compute the g-vectors and omega rotation angles. 
+This little program does a simulation with a slightly tilted crystal.
+
+
+This script computes the omega angles using the xfab/ImageD11 code.
+
+@d generatehkls
+@{
+def generatehkls( a, wvln ):
+    """
+    Generate all of the hkls which can be reached 
+    a is the cubic unit cell parameter
+    """
+    uc = unitcell.unitcell( [ a,a,a,90,90,90],"F" )
+    uc.gethkls_xfab( 2.0/wvln, "Fd-3m" ) # out to 311
+    return np.array([p[1] for p in uc.peaks])
+@}
+
+
+@o simulate_wwm.py
+@{
+@< wwmfunctions @>
+
+if __name__=="__main__":
+   a = 5.43094
+   wvln = 0.25
+   hkls = generatehkls( a, 2*a/np.sqrt(11.1)) # out to 311 for demo
+
+   r3 = 1/math.sqrt(3)
+   u = gv_general.rotation_axis([r3,r3,r3],2.0).matrix
+   u = np.dot(u, gv_general.rotation_axis([0,0,1],45.0).matrix)
+   ub = u/a     # wavelength in ImageD11 is supplied later
+   gve = np.dot(ub, hkls.T )
+   sol1, sol2, valid = gv_general.g_to_k( gve, wvln, axis=[0,0,-1] )
+   tth, eta, omega = transform.uncompute_g_vectors(
+   	  gve, wvln)
+   omega = angmoddeg(omega)
+   sol1 = angmoddeg(sol1)
+   sol2 = angmoddeg(sol2)
+   print "# U matrix"
+   print "U = ",repr(u)
+   print "wvln = ", wvln
+   print "a =",a
+   print "#  h   k   l   gx       gy       gz        om1      om2     ok  prec"
+   for i in range(len(gve[0])):
+        print ("%4d"*3)%tuple(hkls[i]),(" %8.5f"*3)%(tuple(gve[:,i])),
+	if valid[i]: 
+            print (" % 6.2f"*2)%(sol1[i],sol2[i])," valid",
+        else:
+            print "   NaN    NaN   invalid",
+        dsame = abs(omega[0][i] - sol1[i]) + abs( omega[1][i]-sol2[i] )
+        doppo = abs(omega[0][i] - sol2[i]) + abs( omega[1][i]-sol1[i] )
+        print "%.1g"%(min(dsame,doppo))
+@}
+
+Numerically we could evaluate derivatives using the code above
+for some parameters:
+
+
 
 \section{Experimental}
 
@@ -482,626 +1163,6 @@ _wwm_collect_mini(0.0016)
 }'
 @}
 
-\section{Some notes on extinction diffraction}
-
-We are concerned by the overall length of the diffraction vector and
-the projection of this perpendicular to the rotation axis.
-For a single peak we can observe both $g$ and $-g$ as they each cross the
-two sides of the Ewald sphere (from the inside to the outside and the 
-reverse).
-From these four observations we will find peaks at $\phi$ and
-$\phi+180$ when the rotation axis is perpendicular to the beam.
-If there is a beam tilt then there is an offset which depends on the azimuthal
-angle of the reflection.
-The difference in angle between two Friedel pairs gives us a single 
-observation to constrain the length and axis projection (two unknowns).
-If the length is known from having the hkl indices, cell parameter
-and wavelength then we can determine the projection on the axis.
-
-If we tweak the wavelength we change the length of the scattering vector 
-but keep the same direction cosines. 
-This tells us the sign of the solution in the square root equation as the
-peaks shift either to lower or higher angles. 
-
-Example data from 65 and 65.1keV show this in action (figure please FIXME).
-Peaks shift by their width (about 100 eV) either to positive or negative.
-Looks like some Freidel pairs get closer together in angle, some further apart.
-None of them look like staying where they are...
-
-There is a flick up on a tail of the peak sometimes (figure please).
-Currently this is interpreted as a dynamical diffraction effect.
-For the beam going directly through the crystal there is the usual 
-absorbtion along the path.
-If the wafer is at a grazing angle the diffracted beam can exit
-on the opposite surface with a much smaller path length.
-When this diffracted beam diffracts again it will have found a "short cut"
-through the crystal.
-To compute the peakshape for this properly we should look into what is 
-going on inside the Bormann fan. 
-(An interim solution is to avoid using such peaks).
-
-
-\section{Axis tilt alignment procedure}
-
-If a tilt is installed under the axis measure a pair of sharp peaks at 
-0 and 180 degrees.
-Plot the separation of these peaks (-180) versus the tilt angle.
-When the axis is perpendicular to the beam the peaks will be 180 degrees 
-apart.
-Example scan data were collected, for 0,1,2,3 degrees these are:
-\begin{verbatim}
-lid112:/data/id11/crystallography/jon/june13/wwm_35kev
-total 358740
--rw-r--r--  1 opid11 id11  1119343 Jul 30 19:10 junk.spc
--rw-r--r--  1 opid11 id11 66398182 Jul 30 15:32 wwm_35kev.spc
--rw-r--r--  1 opid11 id11 10885993 Jul 30 16:09 wwm_42kev_miome.spc
--rw-r--r--  1 opid11 id11 70560495 Jul 30 17:10 wwm_42kev_miome_hry.spc
--rw-r--r--  1 opid11 id11 70579160 Jul 30 17:31 wwm_42kev_miome_hry1.spc
--rw-r--r--  1 opid11 id11 70574330 Jul 30 17:48 wwm_42kev_miome_hry2.spc
--rw-r--r--  1 opid11 id11 70540335 Jul 30 19:04 wwm_42kev_miome_hry3.spc
--rw-r--r--  1 opid11 id11  5200492 Jul 30 16:47 wwm_42kev_miome_speed.spc
-
-lid112:/data/id11/crystallography/jon/june13 % 
-grep "#[OP]3" wwm_energies/wwm_hry_align_proc.spc/wwm_hry_align_proc.spc.spc 
-#O3     tabx      taby    eurosp     cdtez   berger1     HrotY      s6vg      s6vo
-#P3 3.051758e-07 0 600 -46.22 0 0 0.70000016 1.2903226e-07
-#P3 3.051758e-07 0 600 -46.22 0 0 0.70000016 1.2903226e-07
-#P3 3.051758e-07 0 600 -46.22 0 0.1 0.70000016 1.2903226e-07
-#P3 3.051758e-07 0 600 -46.22 0 0.1 0.70000016 1.2903226e-07
-#P3 3.051758e-07 0 600 -46.22 0 -0.1 0.70000016 1.2903226e-07
-#P3 3.051758e-07 0 600 -46.22 0 -0.1 0.70000016 1.2903226e-07
-#P3 3.051758e-07 0 600 -46.22 0 -0.063194444 0.70000016 1.2903226e-07
-#P3 3.051758e-07 0 600 -46.22 0 -0.063194444 0.70000016 1.2903226e-07
-
-
-lid112:/data/id11/crystallography/jon/june13 % more ~opid11/hry.dat 
-0.0 0.02234
-0.1 0.058066
--0.1 -0.013028
-
-\end{verbatim}
-
-
-\section{Thoughts on indexing crystals}
-
-For the wavelength monitor we can just assume the crystal
-orientation is known.
-In practice one can read off the positions of the (111) reflections
-as the strongest ones in the pattern anyway for a silicon wafer.
-
-Nevertheless it is interesting to think about how to deal with an
-unknown unit cell and to determine the orientation.
-
-If the rotation is on a tilt stage and we can tilt the axis
-with respect to the beam and the reflections shift according to their
-azimuthal position. 
-This should offer a way to get the (sin of) the azimuth angle.
-
-If we tweak the wavelength the reflections generally shift 
-either to higher or lower angles. 
-This tells us whether the reflection crosses into or out of the
-Ewald sphere as the rotation axis moves.
-It also should tell us which direction to look in to find the 
-Friedel pair.
-
-The width of the peaks, at ID11, tells us the glancing angle
-between the reflection and the thickness of the Ewald sphere 
-for that reflection.
-This depends on the bandpass and beam divergence as well as the
-glancing angle. 
-
-By combining several of the pieces of information 
-one can presumably find orientation matrices in simple cases. 
-Due to the symmetry of the experiment it is not clear whether
-a solution is unique...
-
-
-\section{Theory}
-
-There is a nice derivation in Milch and Minor (1974).
-This is also something like the Bond method (ref). 
-We reproduce the Milch and Minor story
-with the notation changed to be more similar to fable/ImageD11.
-The condition for diffraction is:
-
-\[ \mathbf{| s_0 + k | = |s_0| } \]
-
-Here $\mathbf{s_0}$ is the incident wave-vector and $\mathbf{k}$ is the 
-crystal lattice vector at the moment when the diffraction occurs.
-This equation just says the incident momentum is the same as the scattered.
-
-\[ \mathbf{| s_0 + k |^2 = |s_0|^2 } \]
-\[ \mathbf{ |s_0|^2 + 2s_0.k + |k|^2 - |s_0|^2 = 0}  \]
-\[ \mathbf{  |k|^2 + 2s_0.k} = 0 \]
-
-Once the hkl is assigned to the peak then $\mathbf{|k|^2 = |g|^2}$ is a 
-constant which does not depend on rotations ($\mathbf{g}$ is the crystal
-lattice vector prior to rotation to the diffraction condition).
-
-We define a co-ordinate system where the rotation axis defines z and the 
-beam is incoming roughly along x in the x-z plane.
-This follows Milch and Minor (1974) but exchanges labels to approximately 
-follow the fable convention (REF) with a key difference; 
-\emph{the z axis is parallel to the rotation axis and units make 
-$\mathbf{|s_0|}=1$}.
-During the experiment the component of the vector along the rotation axis,
-$g_z$, does not change, so that the rotated vector component 
-$k_z$ is also constant.
-
-Ideally, if the beam is perpendicular to the axis, then it will be along x.
-Otherwise we have:
-
-\[ \mathbf{s_0 = s_{0x} + s_{0z}}\]
-
-...where since $ \mathbf{s_0} = 1 $ we can figure out that 
- $ s_{0x} = \sqrt{ 1 - s^2_{0z}}$.  
-If we put these equations together we get:
-
-\[\mathbf{  |k|^2 + 2(s_{0x} + s_{0z}).(k_x + k_y + k_z) = 0 } \]
-
-Due to the choice of co-ordinate system and use of orthogonal axes 
-only the xx, yy and zz terms from the dot product can be non-zero:
-
-\[ \mathbf{ |k|^2 + 2 s_{0x}.k_x + 2 s_{0z}.k_z = 0 } \]
-\[ \mathbf{ 2 s_{0x}.k_x = - |k|^2 - 2 s_{0z}.k_z } \]
-\[ \mathbf{ k_x = - \frac{|k|^2 - 2 s_{0z}.k_z }{ 2 s_{0x}}} \]
-\[ \mathbf{ k_x = - \frac{|k|^2 - 2 s_{0z}.k_z }{ 2 \sqrt{1-s^2_{0z}}}} \]
-...via the choice of z along rotation axis then...:
-\[ \mathbf{ k_x = - \frac{|g|^2 - 2 s_{0z}.g_z }{ 2 \sqrt{1-s^2_{0z}}}} \]
-
-If the orientation matrix and beam direction are known we are able to 
-compute the g-vector and ${s0z}$ and we can compute $k_x$.
-
-Should someone take the time to carefully align the axis to be exactly
-perpendicular to the beam then the $s_{0z}$ is zero and this reduces to:
-
-\[ mathbf{ k_x = -\frac{|g|^2}{2}} \]
-
-Since the component along the axis is constant, $\mathbf{k_z=g_z}$, 
-then we can get the
-$\mathbf{k_y}$ component from $k_y=\pm \sqrt{|k|^2-k_x^2-k_z^2}$.
-
-There are generally two positions of $\mathbf{k}$ where the diffraction 
-can happen, corresponding to $\pm\mathbf{k_y}$.
-We find these by solving the goniometer equation:
-
-\[ k_x = g_x \cos{\phi} - g_y \sin{\phi} \]
-
-Re-write this in terms of a some different quantities to make it possible
-to solve for the angle. 
-We use the length of the vector in the $xy$ plane, $g_{xy}$ and the angle
-$\theta$:
-\[g_{xy} = \sqrt{g_x^2+g_y^2};   \theta = \arctan{ g_y/g_x } \]
-\[g_{x} = g_{xy}\cos{\theta}; g_y = g_{xy}\sin{\theta} \]
-\[ k_x = g_{xy}\cos{\theta}\cos{\phi} - g_{xy}\sin{\theta}\sin{\phi} \]
-\[ k_x = g_{xy}\cos{( \theta+\phi ) } \]
-\[ \cos{(\theta+\phi)} = - \frac{|g|^2 - 2 s_{0z}g_z }
-     { 2  \sqrt{g_x^2+g_y^2} \sqrt{1-s_{0z}^2 }} \]
-
-Finally:
-
-\[ \phi = \arccos{ \left[ -\frac{|g|^2 - 2 s_{0z}.g_z }
- { 2 g_{xy} \sqrt{1-s^2_{0z}}}\right]} - \arctan{ g_y/g_x } \]
-
-There are two solutions for the inverse cosine for arguments
-inside the range -1 to 1, 
-no solutions outside the range and a single solution for $\pm 1$.
-
-\subsection{Computing all this with derivatives}
-
-We assume an initial orientation matrix is known and that we want to refine
-orientation updates, the wavelength and axis tilt.
-We write our crystal scattering vector as:
-
-\[ \mathbf{c = U.B.h } \]
-
-Going to the units for $g$ for this document means also multiplying 
-by the wavelength, $\lambda$:
-
-\[ \mathbf{g} = \lambda \mathbf{ U.B.h } \]
-
-We need the derivative of $\mathbf{g}$ with respect to small orientation
-changes, which we can choose to make on our $x,y,z$ axes.
-After the small change, for example $r_z$ about $z$ we have:
-
-\[ \mathbf{g} = (g_x\cos{r_z} + g_y\sin{r_z})\mathbf{i} +
-   	        (-g_x\sin{r_z} + g_y\cos{r_z})\mathbf{j} +
-		g_z\mathbf{k} \]
-\[ \frac{d\mathbf{g}}{dr_z} = 
-   (-g_x\sin{r_z} + g_y\cos{r_z})\mathbf{i} +
-   (-g_x\cos{r_z} - g_y\sin{r_z})\mathbf{j} \]
-
-We evaluate this at $r_z=0$ to obtain:
-
-\[ \frac{d\mathbf{g}}{dr_z} = g_y.\mathbf{i} - g_x.\mathbf{j} + 0.\mathbf{k} \]
-
-...which is just the vector $[g_y,-g_x,0]$. 
-The same can be done for each of the three axes. 
-These are just the cross products between the g-vector the three
-basis vectors.
-
-For the derivative with respect to the wavelength we have:
-
-\[\frac{d \mathbf{g}}{d\lambda} = \mathbf{ U.B.h } = 
-  \frac{\mathbf{g}}{\lambda} \]
-
-For the derivatives of $|g|^2$, just $2\times$ a dot of the derivative 
-with the original vector:
-
-\[ \frac{ \partial{\mathbf{|g|^2}} }{ \partial x } = 
-   \frac{ \partial{\mathbf{u.v}} }{ \partial x } = 
-   \frac{ \partial{\mathbf{u^T v}} }{ \partial x } = 
-   \frac{ \partial{\mathbf{u}} }{ \partial x }\mathbf{v} + 
-   \frac{ \partial{\mathbf{v}} }{ \partial x }\mathbf{u} = 
-   2 \frac{ \partial{\mathbf{g}} }{ \partial x }.\mathbf{g} 
- \]
-
-For the derivatives of the inverse cosine and tangent terms we have:
-
-\[ \frac{ \partial atan2(y,x) } { \partial x } = 
-   \frac{ \partial \arctan(y/x) } { \partial x } = 
-   - \frac{ y } { x^2 + y^2 } \]
-\[ \frac{ \partial atan2(y,x) } { \partial y } = 
-   \frac{ \partial \arctan(y/x) } { \partial y } = 
-   \frac{ x } { x^2 + y^2 } \]
-\[ \frac{ \partial \arccos(x) } { \partial x } = 
-   -\frac{1}{ \sqrt{1-x^2} } \]
-
-This should be enough mathematics to put together a fitting program.
-The discontinuity at certain angles might be an issue. 
-Since we work with a wafer we can design the program to place the 
-problem at angles where there is no diffraction,
-Our internal zero angle, and cut point should be close to the 
-plane of the wafer to avoid this problem.
-
-\section{Fitting software}
-
-The fitting code will be benchmarked against ImageD11 in the case of 
-having no axis tilt. 
-Following the easy maintenance of id31sum in comparison to anything
-else the author has ever written, we try for a similar programming
-style here.
-That is to say all the modules are in the section in this nuweb 
-document and the entire programs will be derived from this 
-single file, probably as large single files themselves. 
-
-First the module imports. 
-As this list grows so the distribution of the software is gradually
-crippled.
-
-@d imports
-@{
-import math, numpy as np
-from ImageD11 import unitcell, gv_general, transform
-from ImageD11 import connectedpixels
-@}
-
-
-Some little utility scripts for angle mods etc.
-
-@d utilities
-@{
-def angmod(x): 
-    """ Angle mod 360, radians """
-    return np.arctan2( np.sin(x), np.cos(x))
-
-def angmoddeg(x):
-    """ Angle mod 360, degrees """
-    return np.degrees(angmod(np.radians(x)))
-
-def abscosdeg(x):
-    """ Absolute cosine of angle in degrees """
-    return np.abs(np.cos(np.radians(x)))
-
-def abssindeg(x):
-    """ Absolution sin of angle in degrees """
-    return np.abs(np.sin(np.radians(x)))
-
-@}
-
-
-This script computes the omega angles using the xfab/ImageD11 code.
-
-@d generatehkls
-@{
-def generatehkls( a, wvln ):
-    """
-    Generate all of the hkls which can be reached 
-    a is the cubic unit cell parameter
-    """
-    uc = unitcell.unitcell( [ a,a,a,90,90,90],"F" )
-    uc.gethkls_xfab( 2.0/wvln, "Fd-3m" ) # out to 311
-    return np.array([p[1] for p in uc.peaks])
-@}
-
-Collect together all the little functions etc into one place for now:
-
-@d wwmfunctions
-@{
-@< imports @>
-@< utilities @>
-@< generatehkls @>
-@}
-
-In the future we might want to split this into a no-dependency
-version.
-
-\subsection{Reading the experimental data}
-
-The format is (unfortunately) defined in the wwm\_save spec
-macro, which is not really ideal. 
-In the near future we should save the diode dark offsets and 
-full scale values in headers or a calibration file.
-
-
-@d readspc
-@{
-
-def readspc(fname):
-    """ minimalist spec file reading """
-    scans = []
-    data  = []
-    coltitles = []
-    for line in open(fname).xreadlines():
-        if line[0:2] == "#S":
-            if len(data)>0:
-                scans.append(np.array(data))
-                data = []
-            continue
-        if line[0:2] == "#L":
-            titles = line[2:].split("  ")
-            nvals = len(titles)
-	    coltitles.append(titles)
-            continue
-        if line[0] == "#":
-            continue
-        vals = line.split()
-        if len(vals) == nvals:
-            data.append( [float(v) for v in vals] )
-    if len(data)>0:
-        scans.append(np.array(data))
-    return scans, coltitles
-
-class spcreader(object):
-    def __init__(self, fname):
-        self.fname = fname
-        self.scans, self.coltitles = readspc( fname ) 
-
-@}
-
-\subsection{ Experimental calibration, determination of $\mu$ }
-
-In the ideal case the diodes and electrometers should be calibrated
-to know the dark current and intensity when there is no crystal in 
-the beam.
-If this is not done we can try to figure out some values from the 
-data.
-In the test experiments scans were done where the rotation
-axis was moved out of the beam, so we see the direct beam 
-intensity and can measure it.
-We also measured with the shutter closed to get the 
-diode offset values.
-The absolute X-ray flux can be determined from the diode
-values via the method in Owen et al (2008).
-
-Using the Beer-Lambert law the intensity transmitted will be:
-
-\[    I = I_0 \exp{(-\mu l)} \]
-
-...where $l$ is the path length through the wafer. 
-The effective thickness of the wafer when it rotates is given by:
-
-\[ l = \frac{t}{|\sin{(\phi+\phi_0)}|} \]
-
-...where we have defined the zero angle to be where the wafer
-is parallel to the beam.
-If we take logs of the Beer-Lambert law and insert the equation
-for $l$ and rearrange we get:
-
-\[  |\sin{\phi+\phi_0}| (\log{I_0} - \log{I}) = \mu t   \]
-
-Potential problems arise here if we do not have the true 
-value for $I$, the intensity, but instead we measure some
-number which is related to $I$ via a scale factor (gain) and
-offset (dark current):
-
-\[ I = s(V-V_d) \]
-
-...where $s$ is a scale factor and $V, V_d$ are the output voltages
-measured with and without the X-ray beam.
-
-
-\[   \frac{I}{I_0} = \exp{(-\mu l)} =
-   \frac{s(V-V_d)}{s_0(V_0-V_{0d})} \]
-
-\[   \log{I_0} - \log{I} = \frac{\mu t}{|\sin{(\phi+\phi_0)}|} =
- \log{(s_0(V_0-V_{0d}))} - \log{(s(V-V_d))}  \]
-
-\[ \frac{\mu t}{|\sin{(\phi+\phi_0)}|} = \log{(V_0/V)} + \log{(s_0/s)} + 
-   	     \log{(1-V_{0d}/V_0)} - \log{(1-V_d/V))}  \]
-
-Taking $log(1+x)=x$ when $x$ is small and writing $S=\log{(s_0/s)}$ gives:
-
-\[ \frac{\mu t}{|\sin{(\phi+\phi_0)}|} ~= \log{(V_0/V)} + S - V_{0d}/V_0 - V_d/V  \]
-
-\[ \frac{\mu t}{|\sin{(\phi+\phi_0)}|} ~= 
-   \log{(V_0/V)} + S - \frac{ V_{0d}+V_d }{V_0V}  \]
-
-We should check numerically, but it looks like the term in the dark currents
-is likely to be much smaller than all the others.
-So on a plot of $1/|sin{(\phi+\phi_0)}|$ we should have gradient $\mu t$ and 
-intercept close to $S = \log{(s_0/s)}$.
-If the $phi_0$ value is not correct there is a strong difference between
-the $\mu t$ values for different parts of the scan and this is a 
-non-linear effect. 
-
-We need a little fitting program which takes the data and fits $\phi_0$ and
-the scale factors.
-Stepwise you can get a first guess of $\mu t$ from the gradients and adjust the
-small angle regions to match by varying $\phi_0$.
-
-It looks like a plot of the variation from the linear fit gives a 
-straight line when plotted as:
-\begin{verbatim}
-plot(sign(tan(radians(msa)))*x, (y-np.polyval(p,x))/x,",")
-\end{verbatim}
-This should allow the zero angle to be determined.
-
-Probably this just needs some least squares parameter fitting?
-
-FIXME: XXX: Clean this out to go directly to the answer below
-
-For the determination of $V_0$ and the relative dark currents 
-we can also look at the noise in a measurement where the angle does not 
-change.
-Assuming there is some variation in the input signal (eg, measure a rocking
-curve, open the shutter, whatever) then we should find:
-
-\[   \frac{I}{I_0} = \exp{(-\mu l)} = constant =
-   \frac{s(V-V_d)}{s_0(V_0-V_{0d})} \]
-
-\[   V = kV_0 - (V_{0d} + V_d/k) \]
-
-If the dark current ($V_0$) is small we might approximate this via the log
-identity $\log{(a+b)} = \log{(a(1+b/a))} = \log(a) + \log(1+b/a)$.
-When $a>>b$ this is approximately $\log(a)+b/a$, so that:
-
-???
-
-By fitting this variation to a straight line we can extract the constant
-$k$ and the offset $o = V_{0d} + V_d/k$ (so that  $ok - k.V_{0d} = V_d$).
-
-
-We expand the equation for transmission in terms of the measured signals
-to get:
-\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}+\log{s_0}-\log{(V-V_d)}-\log{s})
-    = \mu t   \]
-
-We see what this will be in terms of our experimental $k$ and offset
-from above which were measured at a specific angle $\phi_k$:
-\[   k = \exp(-\mu l) \frac{s_0}{s} \]
-\[   k = \exp(- \frac{\mu t}{|\sin{\phi_k+\phi_0}|}) \frac{s_0}{s} \]
-\[   \log{k} +  \frac{\mu t}{|\sin{\phi_k+\phi_0}|} =  \log{s_0}-\log{s} \]
-
-We put this into the equation to get:
-
-\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-\log{(V-V_d)} + \log{k} + 
-    \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
-
-And use the offset (the terms $o$ and $k$ is known):
-
-\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-\log{(V- ok - k.V_{0d})} + \log{k} + 
-    \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
-
-\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-
-\log{(k (V/k- o - V_{0d}))} + \log{k} +
-     \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
-
-\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-
-    \log{(V/k - o - V_{0d})}  +
-     \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
-
-We will call the "corrected" voltage $ V/k-o=V_k$:
-
-\[  |\sin{\phi+\phi_0}| (\log{(V_0-V_{0d})}-
-    \log{(V_k - V_{0d})}  +
-     \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
-
-\[  |\sin{\phi+\phi_0}| (\log{V_0/V_k} - \log{(1-V_{0d}/V_0)}-
-    \log{(1 - V_{0d}/V_k)}  +
-     \frac{ \mu t }{|\sin{\phi_k+\phi_0}|} ) = \mu t \]
-
-FIXME: XXX: Clean this out to go directly to the answer here
-
-If we plot $\log{(V_0/V_k)}$ versus $1/|\sin(\phi+phi_0)|$ then
-we should have a straight line with gradient $\mu t$ and 
-intercept which picks up a lot of the crap above.
-
-This trial has an "ang" definition which puts the zero at 90 degrees, anyway:
-
-\begin{verbatim}
-plot( 1/(abscosd(ang[::10])), 
-      log( data[120400::10,3])-log(data[120400::10,2]),",")
-ylim(0,1.5)
-xlim(0,40)
-title("wwm_42kev/wwm_42kev_0.0016.spc")
-xlabel("1/|sin(phi+phi0)|")
-ylabel("log(Vmonitor)-log(Vsignal)")
-\end{verbatim}
-
-This is plotted on figure~\ref{fig:muplot} on page~\pageref{fig:muplot}. 
-It is clearly linear for a wide range of angles, up to the point where
-the beam starts to overspill at the sides of the wafer.
-
-If the $\phi_0$ value is not well determined we will get quite different
-gradients in the different quadrants of 
-
-\begin{figure}[tb]
-\label{fig:muplot}
-\includegraphics[width=\textwidth]{determine_mu}
-\caption{ By measuring the gradient from this plot we can determine
-the instrumental constants relating to diode efficiency and $\mu t$.}
-\end{figure}
-
-We note experimentally that fitting is mostly sensitive to the 
-$\phi_0$ at angles near where the wafer is parallel to the beam, eg, 
-near 0 and 180 degrees when $\sin{\phi}$ is also small.
-We will assume that the offset angle $\phi_0$ that we are trying to 
-correct is small.
-In an iterative procedure this will eventually become true as the 
-algorithm converges.
-Expanding $\sin(\phi+\phi_0) = \sin{\phi}\cos{\phi_0} + \cos{\phi}\sin{\phi_0}$
-
-
-
-
-
-\subsection{ Programs }
-
-We generate idealised data with a (semi-) random orientation matrix
-and compute the g-vectors and omega rotation angles. 
-This little program does a simulation with a slightly tilted crystal.
-
-@o simulate_wwm.py
-@{
-@< wwmfunctions @>
-
-if __name__=="__main__":
-   a = 5.43094
-   wvln = 0.25
-   hkls = generatehkls( a, 2*a/np.sqrt(11.1)) # out to 311 for demo
-
-   r3 = 1/math.sqrt(3)
-   u = gv_general.rotation_axis([r3,r3,r3],2.0).matrix
-   u = np.dot(u, gv_general.rotation_axis([0,0,1],45.0).matrix)
-   ub = u/a     # wavelength in ImageD11 is supplied later
-   gve = np.dot(ub, hkls.T )
-   sol1, sol2, valid = gv_general.g_to_k( gve, wvln, axis=[0,0,-1] )
-   tth, eta, omega = transform.uncompute_g_vectors(
-   	  gve, wvln)
-   omega = angmoddeg(omega)
-   sol1 = angmoddeg(sol1)
-   sol2 = angmoddeg(sol2)
-   print "# U matrix"
-   print "U = ",repr(u)
-   print "wvln = ", wvln
-   print "a =",a
-   print "#  h   k   l   gx       gy       gz        om1      om2     ok  prec"
-   for i in range(len(gve[0])):
-        print ("%4d"*3)%tuple(hkls[i]),(" %8.5f"*3)%(tuple(gve[:,i])),
-	if valid[i]: 
-            print (" % 6.2f"*2)%(sol1[i],sol2[i])," valid",
-        else:
-            print "   NaN    NaN   invalid",
-        dsame = abs(omega[0][i] - sol1[i]) + abs( omega[1][i]-sol2[i] )
-        doppo = abs(omega[0][i] - sol2[i]) + abs( omega[1][i]-sol1[i] )
-        print "%.1g"%(min(dsame,doppo))
-@}
-
-Numerically we could evaluate derivatives using the code above
-for some parameters:
-
-
 
 
 \section{Building the code}
@@ -1113,6 +1174,7 @@ pdflatex wwm
 @}
 
 \section{ Literature }
+
 The Indexing of Single-Crystal X-ray Rotation Photographs.
 J. R. Milch and T. C. Minor.
 J. Appl. Cryst. (1974) 7, 502
@@ -1125,9 +1187,13 @@ Determination of X-ray flux using silicon pin diodes
 R. L. Owen, J. M. Holton, C. Shulze-Briese and E. F. Garman.
 J. Synch. Rad. (2008) 16, 143-151.
 
+Dynamical Diffraction of X Rays by Perfect Crystals
+Rev Mod Phys. 36(3) 681-717 (1964)
+B. W. Batterman and H. Cole
+
 \section{ Smoothing code from the net }
 
-This comes from the scipy wiki (link please!)
+This comes from the scipy wiki (http://wiki.scipy.org/Cookbook/SavitzkyGolay)
 
 @d savitzky
 @{
@@ -1208,28 +1274,6 @@ def savitzky_golay(y, window_size, order, deriv=0, rate=1):
 
 @d unsorted
 @{
-def makesig(ret):
-    """
-    ret = readspc("wwm_42kev/wwm_42kev_0.0016.spc")
-    t = transmitted
-    m = monitor
-    t0 = dark current transmitted (no beam)
-    m0 = dark current monitor (no beam) 
-    ts = transmitted scale factor (no xtal)
-    ms = monitor scale factor (no xtal)
-    """
-    t = ret[:,2]
-    m = ret[:,3]
-    t0= t[:50000].mean()
-    ts = (t-t0)[90000:98000].mean()
-    m0 = m[:50000].mean()
-    ms = (m-m0)[90000:98000].mean()
-    ascale = 160000.0
-    a = ret[:,1]/ascale
-    a0 = 0.88
-    sclean = -np.log(((t-t0)*ms/(m-m0)/ts)[120400:])*abscosd(a[120400:]-a0)
-    return a[120400:]-a0,sclean
-
 def find_peaks( ang, sig, npxmin = 10 ):
     """
     Find connected groups of pixels...
