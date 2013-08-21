@@ -554,30 +554,27 @@ def readspc(fname):
     scans = []
     data  = []
     coltitles = []
+    nvals = -1
     for line in open(fname).xreadlines():
+#        print line
         if line[0:2] == "#S":
             if len(data)>0:
                 scans.append(np.array(data))
                 data = []
             continue
         if line[0:2] == "#L":
-            titles = line[2:].split("  ")
+            titles = line[2:].strip().split("  ") 
             nvals = len(titles)
-	    coltitles.append(titles)
+    	    coltitles.append(titles)
             continue
         if line[0] == "#":
             continue
         vals = line.split()
-        if len(vals) == nvals:
+        if len(vals)>0 and len(vals) == nvals:
             data.append( [float(v) for v in vals] )
     if len(data)>0:
         scans.append(np.array(data))
     return scans, coltitles
-
-class spcreader(object):
-    def __init__(self, fname):
-        self.fname = fname
-        self.scans, self.coltitles = readspc( fname ) 
 
 @}
 
@@ -586,21 +583,24 @@ class spcreader(object):
 
 We need to define some experimental parameters.
 We use a simple python dictionary and wrap this into
-an object giving load and save capability.
+an object giving load and save capability and experiment description.
 
-@d parameters
+@d WWMpar
 @{
 wwmpars = {
-    'darkMonit' : 0.0,
-    'darkTrans' : 0.0,
+    'zeroMonit' : 0.0,
+    'zeroTrans' : 0.0,
+    'zeroAngle'  : 0.0,
     'scaleMonit' : 1.0,
     'scaleTrans' : 1.0,
-    'angleScale' : 160000.0,
-    'angleZero'  : 0.0
+    'scaleAngle' : 160000.0,
+    'chanMonit'  : 'CH5',
+    'chanTrans'  : 'CH6',
+    'chanEnc'    : 'CH1',
     }
 
 
-class WWMparameters(object):
+class WWMpar(object):
     def __init__(self, **pars):
         self.__dict__.update(pars)
     def save(self, filename):
@@ -623,10 +623,10 @@ into a json file (ascii representation of a dict).
 @O partest.py
 @{
 @<imports@>
-@<parameters@>
+@<WWMpar@>
 
 if __name__=="__main__":
-    p = WWMparameters( **wwmpars )
+    p = WWMpar( **wwmpars )
     print str(p)
     p.save("testpars.json")
     p.load("testpars.json")
@@ -635,31 +635,6 @@ if __name__=="__main__":
 
 Assuming we have read in one or several spec files we need to 
 fit them to extract the $\mu t$ and wafer zero angle.
-
-@d makesig
-@{
-def makesig(scan, titles):
-    """
-    ret = readspc("wwm_42kev/wwm_42kev_0.0016.spc")
-    t = transmitted
-    m = monitor
-    t0 = dark current transmitted (no beam)
-    m0 = dark current monitor (no beam) 
-    ts = transmitted scale factor (no xtal)
-    ms = monitor scale factor (no xtal)
-    """
-    t = scan[:,titles.index('CH5')]
-    m = scan[:,titles.index('CH6')]
-    t0= t[:50000].mean()
-    ts = (t-t0)[90000:98000].mean()
-    m0 = m[:50000].mean()
-    ms = (m-m0)[90000:98000].mean()
-    ascale = 160000.0
-    a = ret[:,1]/ascale
-    a0 = 0.88
-    sclean = -np.log(((t-t0)*ms/(m-m0)/ts)[120400:])*abscosd(a[120400:]-a0)
-    return a[120400:]-a0,sclean
-@}
 
 
 
@@ -724,11 +699,179 @@ if __name__=="__main__":
 @}
 
 Numerically we could evaluate derivatives using the code above
-for some parameters:
+for some parameters: ...
 
 
+\subsection{ The user interface }
+
+This is where all the time will go.
+
+What is needed?
+
+Ability to select a spec file.
+
+Ability to decide on a scan and regions to use for dark and gain calibration
+when wafer was offset.
+
+Ability to find gain and offset by some other method (eg: noise in the monitor).
+
+Ability to select scan(s) ready for peaksearching.
+
+Ability to plot data and edit parameters.
+
+Save peaks into a file.
+
+Fit peak positions.
+
+Globally we have a set of experimental parameters in the WWMexp object.
+Separate from this we have a notion of a particular scan or series 
+of scans giving rise to a dataset.
+
+@d WWMdataset
+@{
+
+@<readspc@>
+class WWMdataset(object):
+    def __init__(self, fname, pars):
+        self.fname = fname
+        self.scans, self.coltitles = readspc( fname ) 
+        self.pars = pars
+    def getcol(self, scan, name):
+        print scan, name
+        assert scan >= 0 and scan < len(self.scans), (scan, len(self.scans))
+        if name in self.coltitles[scan]:
+            i = self.coltitles[scan].index(name)
+        else:
+            print name
+            print self.coltitles[scan]
+            raise
+        return self.scans[scan][:,i]
+    def getMonit(self, scan):
+        return self.getcol( scan, self.pars.chanMonit )
+    def getTrans(self, scan):
+        return self.getcol( scan, self.pars.chanTrans )
+    def getAngle(self, scan):
+        return self.getcol( scan, self.pars.chanAngle )/self.pars.scaleAngle
+    def getSignal(self, scan):
+        t = (self.getTrans(scan) - self.pars.zeroTrans)/self.pars.scaleTrans
+        m = (self.getMonit(scan) - self.pars.zeroMonit)/self.pars.scaleMonit
+        return t/m
+
+@}
+
+\subsection{Dark and Gain Calibration}
+
+We combine a set of experimental parameters with a scan to 
+get to the calibration. 
+Minimal inputs are the specfilename and scan numbers, we can also 
+add the scan motor steps and angle channel.
+
+@d WWMcalib
+@{
+@<UI@>
+
+def WWMcalib( dataset, darkscan, floodscan ):
+    dataset.pars.zeroMonit = dataset.getMonit( darkscan ).mean()
+    dataset.pars.zeroTrans = dataset.getTrans( darkscan ).mean()
+    fm = dataset.getMonit( floodscan )
+    ft = dataset.getTrans( floodscan )
+    print "Going to call UIgetrange"
+    low, high = UIgetrange( "Range to use for flood",
+                    np.arange( len(fm )),
+                    [fm, ft]
+                    )
+    dataset.pars.scaleMonit = fm[int(low):int(high)].mean()
+    dataset.pars.scaleTrans = ft[int(low):int(high)].mean()
+    return dataset.pars
+@}
+
+This is the script which is run to work out the gains and offsets
+of the two amplifiers. 
+It works by having a scan with the shutter closed and a scan
+where some region has no wafer in the beam.
+
+@o WWMcalib.py
+@{
+@<imports@>
+@<WWMpar@>
+@<WWMdataset@>
+@<WWMcalib@>
+
+if __name__=="__main__":
+    import sys
+    try:
+        fname = sys.argv[1]
+        pars = WWMpar()
+        pars.load(sys.argv[2])
+        darkscan = int(sys.argv[3])
+        floodscan = int(sys.argv[4])
+    except:
+        print "Usage: %s specfile jsonparfile darkscan floodscan"
+        raise
+    dataset = WWMdataset( fname, pars )
+    pars = WWMcalib( dataset , darkscan, floodscan )
+    print pars
+    pars.save( sys.argv[2] )
+@}
+
+\subsection{ Determination of the wafer angle }
+
+Inputs: parameters specfile listofscans
+
+Plot signal versus angle
+
+Identify approximate zero (mouse click) and region to avoid due to
+overflow.
+
+Plot log(I0/I) = mu / |sin(phi + phi0)|
+
+
+
+Normalisation and peaksearching
+
+
+
+
+\section{User interface }
+
+This needs to be fixed. Life is short.
+For now we will just hack something together using matplotlib 
+and the command line.
+
+@d UIgetrange
+@{
+
+import pylab
+
+def UIgetrange( title, x, ylist):
+
+    lowhigh = []
+    fig = pylab.figure()
+    ax = fig.add_subplot(111)
+    ax.set_title(title)
+    for y in ylist:
+        line, = ax.plot(x, y, ",")
+    def cb(e):
+        """ call back to record clicks """
+        lowhigh.append(e.xdata)
+        ax.plot( [e.xdata,e.xdata],ax.get_ylim(),"-")
+        fig.canvas.draw()
+        if len(lowhigh)==2:
+            fig.close()
+    cid = fig.canvas.mpl_connect('button_press_event', cb )
+    pylab.show()
+    return min(lowhigh[-2:]), max(lowhigh[-2:])
+
+@}
+
+@d UI 
+@{ 
+@<UIgetrange@>
+@}
 
 \section{Experimental}
+
+
 
 
 \subsection{The MUSST program}
