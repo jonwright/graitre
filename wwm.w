@@ -596,12 +596,14 @@ wwmpars = {
     'scaleAngle' : 160000.0,
     'chanMonit'  : 'CH6',
     'chanTrans'  : 'CH5',
-    'chanEnc'    : 'CH1',
+    'chanAngle'    : 'CH1',
     }
 
 
 class WWMpar(object):
-    def __init__(self, **pars):
+    def __init__(self, filename=None, **pars):
+        if filename is not None:
+            self.load(filename)
         self.__dict__.update(pars)
     def save(self, filename):
         open(filename,"w").write( 
@@ -737,25 +739,34 @@ class WWMdataset(object):
         self.scans, self.coltitles = readspc( fname ) 
         self.pars = pars
     def getcol(self, scan, name):
-        print scan, name
-        assert scan >= 0 and scan < len(self.scans), (scan, len(self.scans))
-        if name in self.coltitles[scan]:
-            i = self.coltitles[scan].index(name)
+        """ Accepts a single scan or a list of scans """
+        if np.iterable(scan): 
+            # Bounds check first
+            i = self.coltitles[scan[0]].index(name)
+            for s in scan:
+                assert s >= 0 and s < len(self.scans), \
+                    (s,scan, len(self.scans))
+            assert i == self.coltitles[s].index(name)
+            return np.concatenate( [self.scans[s][:,i] for s in scan] )
         else:
-            print name
-            print self.coltitles[scan]
-            raise
-        return self.scans[scan][:,i]
+            if name in self.coltitles[scan]:
+                i = self.coltitles[scan].index(name)
+            else:
+                print name
+                print self.coltitles[scan]
+                raise
+            return self.scans[scan][:,i]
     def getMonit(self, scan):
         return self.getcol( scan, self.pars.chanMonit )
     def getTrans(self, scan):
         return self.getcol( scan, self.pars.chanTrans )
     def getAngle(self, scan):
         return self.getcol( scan, self.pars.chanAngle )/self.pars.scaleAngle
-    def getSignal(self, scan):
+    def getSignal(self, scan):           
         t = (self.getTrans(scan) - self.pars.zeroTrans)/self.pars.scaleTrans
         m = (self.getMonit(scan) - self.pars.zeroMonit)/self.pars.scaleMonit
         return t/m
+
 
 @}
 
@@ -823,32 +834,28 @@ Plot signal versus angle.
 Identify approximate zero (mouse click) and region to avoid due to
 overflow.
 
-Plot log(signal) versus 1/|sin(phi + phi0)|
+Plot 1/log(signal) versus |sin(phi + phi0)|
 
-Thus far the best plot found for the small angle region is like:
+Step 1: estimate the gradient of this to get mu t.
 
-abs(sin(angle))*tan(angle) versus tan(angle)/log(signal)
+p = np.polyfit(abs(sin(radians(a+a0))),1/log(s),1)
 
-d/dphi0 [abs(sin(phi+phi0))] = |sin(phi+phi0)|/tan(phi+phi0)
+OR histogram of log(signal)*|sin(phi + phi0)| -> mu t value and variance
 
-so |sin| ~= |sin| + phi0 * sin(phi+phi0)/tan(phi+phi0) + ... O(phi0^2)
+Step 2: estimate the angular zero via:
 
-so |sin| ~= |sin| ( 1+phi0/tan(phi) )
+a00 median( tan(radians(a+a0))*(1-1/mut/log(s)/abs(sin(radians(a+a0)))),",") )
 
-we had |sin| = mut/log(signal)
+since:
+\[ mut/log(s) = |sin(x)| ~= |sin(x)| ( 1 + x0/tan(x) ) \]
+\[ (mut/log(s)/sin(x) - 1)*tan(x) = x0 \]
 
-we get |sin|(1 + phi0/tan) = mut/log(signal)
+Step 3: update a0 = a0 - degrees(a00)
 
-small angles, tan = sin= x
+Step 4: repeat fit removing outliers... (3 sigma on diff)
 
- p (1 + phi0/p) = mut/log(signal)
- p = mut/log(signal) - p0
-
-Gradient is mut, intercept is 
-
-
-Normalisation and peaksearching
-
+Finally, plot angle versus log(signal)*|sin(phi + phi0)| and go look for the
+peaks.
 
 
 
