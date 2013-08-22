@@ -594,8 +594,8 @@ wwmpars = {
     'scaleMonit' : 1.0,
     'scaleTrans' : 1.0,
     'scaleAngle' : 160000.0,
-    'chanMonit'  : 'CH5',
-    'chanTrans'  : 'CH6',
+    'chanMonit'  : 'CH6',
+    'chanTrans'  : 'CH5',
     'chanEnc'    : 'CH1',
     }
 
@@ -773,8 +773,8 @@ add the scan motor steps and angle channel.
 def WWMcalib( dataset, darkscan, floodscan ):
     dataset.pars.zeroMonit = dataset.getMonit( darkscan ).mean()
     dataset.pars.zeroTrans = dataset.getTrans( darkscan ).mean()
-    fm = dataset.getMonit( floodscan )
-    ft = dataset.getTrans( floodscan )
+    fm = dataset.getMonit( floodscan ) - dataset.pars.zeroMonit
+    ft = dataset.getTrans( floodscan ) - dataset.pars.zeroTrans
     print "Going to call UIgetrange"
     low, high = UIgetrange( "Range to use for flood",
                     np.arange( len(fm )),
@@ -818,13 +818,33 @@ if __name__=="__main__":
 
 Inputs: parameters specfile listofscans
 
-Plot signal versus angle
+Plot signal versus angle.
 
 Identify approximate zero (mouse click) and region to avoid due to
 overflow.
 
-Plot log(I0/I) = mu / |sin(phi + phi0)|
+Plot log(signal) versus 1/|sin(phi + phi0)|
 
+Thus far the best plot found for the small angle region is like:
+
+abs(sin(angle))*tan(angle) versus tan(angle)/log(signal)
+
+d/dphi0 [abs(sin(phi+phi0))] = |sin(phi+phi0)|/tan(phi+phi0)
+
+so |sin| ~= |sin| + phi0 * sin(phi+phi0)/tan(phi+phi0) + ... O(phi0^2)
+
+so |sin| ~= |sin| ( 1+phi0/tan(phi) )
+
+we had |sin| = mut/log(signal)
+
+we get |sin|(1 + phi0/tan) = mut/log(signal)
+
+small angles, tan = sin= x
+
+ p (1 + phi0/p) = mut/log(signal)
+ p = mut/log(signal) - p0
+
+Gradient is mut, intercept is 
 
 
 Normalisation and peaksearching
