@@ -485,7 +485,13 @@ crippled.
 
 @d imports
 @{
-import math, numpy as np, json, pprint
+# standard library
+import math, json, pprint, time
+
+# standard science stack
+import numpy as np, pylab
+
+# Fable code from Jon
 from ImageD11 import unitcell, gv_general, transform
 from ImageD11 import connectedpixels
 @}
@@ -510,6 +516,10 @@ def abscosdeg(x):
 def abssindeg(x):
     """ Absolution sin of angle in degrees """
     return np.abs(np.sin(np.radians(x)))
+
+def tandeg(x):
+    """ tangent of angle in degrees """
+    return np.tan(np.radians(x))
 
 @}
 
@@ -549,31 +559,42 @@ full scale values in headers or a calibration file.
 @d readspc
 @{
 
-def readspc(fname):
-    """ minimalist spec file reading """
-    scans = []
-    data  = []
-    coltitles = []
-    nvals = -1
-    for line in open(fname).xreadlines():
-#        print line
-        if line[0:2] == "#S":
-            if len(data)>0:
-                scans.append(np.array(data))
-                data = []
-            continue
-        if line[0:2] == "#L":
-            titles = line[2:].strip().split("  ") 
-            nvals = len(titles)
-    	    coltitles.append(titles)
-            continue
+def cleanbuf( buf, nvals ):
+    for line in buf:
         if line[0] == "#":
             continue
         vals = line.split()
-        if len(vals)>0 and len(vals) == nvals:
-            data.append( [float(v) for v in vals] )
-    if len(data)>0:
-        scans.append(np.array(data))
+        if len(vals) == nvals:
+            yield [float(v) for v in vals]
+
+def decodescan( buf, ncols ):
+    return np.array( [row for row in cleanbuf(buf, ncols)])
+
+
+def readspc(fname):
+    """ minimalist spec file reading """
+    import cStringIO
+    scans = []
+    coltitles = []
+    start = time.time()
+    with open(fname) as f:
+        lines = f.readlines()
+        scanlines = []
+        for i,line in enumerate(lines):
+            if line[0:2] == "#S":
+                scanlines.append(i)
+            if line[0:2] == "#L":
+                titles = line[2:].strip().split("  ") 
+                coltitles.append(titles)
+        ns = len(scanlines)
+        for i in range(ns):
+            s = scanlines[i]
+            if i+1 < ns:
+                e = scanlines[i+1]
+            else:
+                e = len(lines)
+            scans.append( lines[s:e] ) 
+        print "time to chop scans into buffers",fname,time.time()-start
     return scans, coltitles
 
 @}
@@ -590,13 +611,14 @@ an object giving load and save capability and experiment description.
 wwmpars = {
     'zeroMonit' : 0.0,
     'zeroTrans' : 0.0,
-    'zeroAngle'  : 0.0,
+    'zeroAngle'  : -90.0,
     'scaleMonit' : 1.0,
     'scaleTrans' : 1.0,
     'scaleAngle' : 160000.0,
     'chanMonit'  : 'CH6',
     'chanTrans'  : 'CH5',
     'chanAngle'    : 'CH1',
+    'mut'   : 0.05,
     }
 
 
@@ -729,23 +751,35 @@ Globally we have a set of experimental parameters in the WWMexp object.
 Separate from this we have a notion of a particular scan or series 
 of scans giving rise to a dataset.
 
-@d WWMdataset
+@d WWM
 @{
-
+@<imports@>
+@<utilities@>
+@<UI@>
 @<readspc@>
+
+@<WWMpar@>
+
 class WWMdataset(object):
     def __init__(self, fname, pars):
         self.fname = fname
         self.scans, self.coltitles = readspc( fname ) 
         self.pars = pars
+    def checkscan(self, scannumber):
+        """ check scan is indeed in the file
+            and decodes the ascii on demand """
+        assert scannumber >= 0 and scannumber < len(self.scans), \
+                    (s,scannumber, len(self.scans))
+        if not isinstance(self.scans[scannumber], np.ndarray):
+            self.scans[scannumber] = decodescan(self.scans[scannumber], 
+                                        len(self.coltitles[scannumber]))
     def getcol(self, scan, name):
         """ Accepts a single scan or a list of scans """
         if np.iterable(scan): 
             # Bounds check first
             i = self.coltitles[scan[0]].index(name)
             for s in scan:
-                assert s >= 0 and s < len(self.scans), \
-                    (s,scan, len(self.scans))
+                self.checkscan(s)
             assert i == self.coltitles[s].index(name)
             return np.concatenate( [self.scans[s][:,i] for s in scan] )
         else:
@@ -755,6 +789,7 @@ class WWMdataset(object):
                 print name
                 print self.coltitles[scan]
                 raise
+            self.checkscan(scan)
             return self.scans[scan][:,i]
     def getMonit(self, scan):
         return self.getcol( scan, self.pars.chanMonit )
@@ -766,7 +801,10 @@ class WWMdataset(object):
         t = (self.getTrans(scan) - self.pars.zeroTrans)/self.pars.scaleTrans
         m = (self.getMonit(scan) - self.pars.zeroMonit)/self.pars.scaleMonit
         return t/m
-
+# we make the calib a class method for a dataset
+@<WWMcalib@>
+# And we have a class method for fitting the mut and wafer zero:
+@<WWMnorm@>
 
 @}
 
@@ -779,21 +817,20 @@ add the scan motor steps and angle channel.
 
 @d WWMcalib
 @{
-@<UI@>
 
-def WWMcalib( dataset, darkscan, floodscan ):
-    dataset.pars.zeroMonit = dataset.getMonit( darkscan ).mean()
-    dataset.pars.zeroTrans = dataset.getTrans( darkscan ).mean()
-    fm = dataset.getMonit( floodscan ) - dataset.pars.zeroMonit
-    ft = dataset.getTrans( floodscan ) - dataset.pars.zeroTrans
-    print "Going to call UIgetrange"
-    low, high = UIgetrange( "Range to use for flood",
+    def calib( dataset, darkscan, floodscan ):
+        dataset.pars.zeroMonit = dataset.getMonit( darkscan ).mean()
+        dataset.pars.zeroTrans = dataset.getTrans( darkscan ).mean()
+        fm = dataset.getMonit( floodscan ) - dataset.pars.zeroMonit
+        ft = dataset.getTrans( floodscan ) - dataset.pars.zeroTrans
+        print "Going to call UIgetrange"
+        low, high = UIgetrange( "Range to use for flood",
                     np.arange( len(fm )),
                     [fm, ft]
                     )
-    dataset.pars.scaleMonit = fm[int(low):int(high)].mean()
-    dataset.pars.scaleTrans = ft[int(low):int(high)].mean()
-    return dataset.pars
+        dataset.pars.scaleMonit = fm[int(low):int(high)].mean()
+        dataset.pars.scaleTrans = ft[int(low):int(high)].mean()
+        return dataset.pars
 @}
 
 This is the script which is run to work out the gains and offsets
@@ -803,11 +840,7 @@ where some region has no wafer in the beam.
 
 @o WWMcalib.py
 @{
-@<imports@>
-@<WWMpar@>
-@<WWMdataset@>
-@<WWMcalib@>
-
+@<WWM@>
 if __name__=="__main__":
     import sys
     try:
@@ -820,7 +853,7 @@ if __name__=="__main__":
         print "Usage: %s specfile jsonparfile darkscan floodscan"
         raise
     dataset = WWMdataset( fname, pars )
-    pars = WWMcalib( dataset , darkscan, floodscan )
+    pars = dataset.calib( darkscan, floodscan )
     print pars
     pars.save( sys.argv[2] )
 @}
@@ -857,6 +890,74 @@ Step 4: repeat fit removing outliers... (3 sigma on diff)
 Finally, plot angle versus log(signal)*|sin(phi + phi0)| and go look for the
 peaks.
 
+@d WWMnorm
+@{
+    def norm(self, scans, cutrange=2.5, debug=True):
+        """
+        a0 = zero angle for wafer, ask if None
+        cutrange = excluded angular range
+        """
+        a = self.getAngle(scans)
+        s = self.getSignal(scans)
+        a0 = self.pars.zeroAngle
+        if a0 is "None":
+            a0,junk = UIgetxy( "Zero angle for wafer please", a,[s,])
+            print "Got zero angle as",a0,junk
+        acor = angmoddeg(a-a0)
+        msk = (abs(acor) > cutrange)&(abs(acor)<180-cutrange)
+        af = np.compress( msk, a )
+        sf = 1.0/np.log(np.compress( msk, s )) # log signal here
+        ncycle = 5
+        for i in range(ncycle):
+            x = abssindeg(af-a0) # changes per run
+            p = np.polyfit( x, sf, 1 ) # offset term ??
+            mut = -1/p[0]
+            a0a = tandeg(af-a0)*(sf*mut/x + 1)
+            a00 = np.median(a0a)
+            if debug: 
+                print "mut is",mut, p
+#                pylab.figure()
+#                pylab.plot(x*np.sign(af-a0), sf,",")
+                print "a00 is",a00, np.degrees(a00),a0
+                print "deviations",a0a.mean(),a0a.std()
+#                pylab.figure()
+#                pylab.plot( af-a0, a0a ,",")
+#                pylab.show()
+#                raw_input()
+
+            a0 += np.degrees(a00)
+            if i < ncycle-1:
+                outliers = abs(a0a - a00)/a0a.std() < 3
+                print "Suppressed",len(outliers)-outliers.sum()
+                af = np.compress( outliers, af )
+                sf = np.compress( outliers, sf )
+        self.pars.mut = mut
+        self.pars.zeroAngle = a0
+@}      
+
+
+@o WWMnorm.py
+@{
+@<WWM@>
+if __name__=="__main__":
+    import sys
+    try:
+        fname = sys.argv[1]
+        pars = WWMpar()
+        pars.load(sys.argv[2])
+        scans = [int(v) for v in sys.argv[3:]]
+    except:
+        print "Usage: %s specfile jsonparfile scans"
+        raise
+    dataset = WWMdataset( fname, pars )
+    dataset.norm( scans )
+    dataset.pars.save(sys.argv[2])
+@}
+
+\subsection{Peak searching}
+
+
+
 
 
 \section{User interface }
@@ -868,11 +969,9 @@ and the command line.
 @d UIgetrange
 @{
 
-import pylab
-
 def UIgetrange( title, x, ylist):
-
     lowhigh = []
+    pylab.ioff()
     fig = pylab.figure()
     ax = fig.add_subplot(111)
     ax.set_title(title)
@@ -884,16 +983,42 @@ def UIgetrange( title, x, ylist):
         ax.plot( [e.xdata,e.xdata],ax.get_ylim(),"-")
         fig.canvas.draw()
         if len(lowhigh)==2:
-            fig.close()
+            ax.set_title("You can close it now")
+            fig.canvas.draw()
     cid = fig.canvas.mpl_connect('button_press_event', cb )
     pylab.show()
     return min(lowhigh[-2:]), max(lowhigh[-2:])
 
 @}
 
+Now to pick up a single click.
+
+@d UIgetxy
+@{
+def UIgetxy( title, x, ylist):
+    ret = [0,0]
+    pylab.ioff()
+    fig = pylab.figure()
+    ax = fig.add_subplot(111)
+    ax.set_title(title)
+    for y in ylist:
+        line, = ax.plot(x, y, ",")
+    def cb(e):
+        """ call back to record clicks """
+        ret[:] = e.xdata, e.ydata
+        ax.plot( [e.xdata,e.xdata],ax.get_ylim(),"-")
+        ax.plot( ax.get_xlim(),[e.ydata,e.ydata],"-")
+        ax.set_title("You can close it now")
+        fig.canvas.draw()
+    cid = fig.canvas.mpl_connect('button_press_event', cb )
+    pylab.show()
+    return ret
+@}
+
 @d UI 
 @{ 
 @<UIgetrange@>
+@<UIgetxy@>
 @}
 
 \section{Experimental}
