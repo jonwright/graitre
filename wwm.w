@@ -493,7 +493,8 @@ import numpy as np, pylab
 
 # Fable code from Jon
 from ImageD11 import unitcell, gv_general, transform
-from ImageD11 import connectedpixels
+from ImageD11.connectedpixels import blobproperties, connectedpixels,\
+      blob_moments, s_1, s_I, mx_I, bb_mn_f, bb_mx_f
 @}
 
 
@@ -804,7 +805,11 @@ class WWMdataset(object):
 # we make the calib a class method for a dataset
 @<WWMcalib@>
 # And we have a class method for fitting the mut and wafer zero:
-@<WWMnorm@>
+@<WWMmut@>
+# And we have a class method for computing the profile
+@<WWMabsprof@>
+@<WWMpeaksearch@>
+
 
 @}
 
@@ -890,9 +895,9 @@ Step 4: repeat fit removing outliers... (3 sigma on diff)
 Finally, plot angle versus log(signal)*|sin(phi + phi0)| and go look for the
 peaks.
 
-@d WWMnorm
+@d WWMmut
 @{
-    def norm(self, scans, cutrange=2.5, debug=True):
+    def mut(self, scans, cutrange=2.5, debug=True):
         """
         a0 = zero angle for wafer, ask if None
         cutrange = excluded angular range
@@ -916,14 +921,14 @@ peaks.
             a00 = np.median(a0a)
             if debug: 
                 print "mut is",mut, p
-#                pylab.figure()
-#                pylab.plot(x*np.sign(af-a0), sf,",")
+                pylab.figure()
+                pylab.plot(x*np.sign(af-a0), sf,",")
                 print "a00 is",a00, np.degrees(a00),a0
                 print "deviations",a0a.mean(),a0a.std()
-#                pylab.figure()
-#                pylab.plot( af-a0, a0a ,",")
-#                pylab.show()
-#                raw_input()
+                pylab.figure()
+                pylab.plot( af-a0, a0a ,",")
+                pylab.show()
+                raw_input()
 
             a0 += np.degrees(a00)
             if i < ncycle-1:
@@ -935,8 +940,7 @@ peaks.
         self.pars.zeroAngle = a0
 @}      
 
-
-@o WWMnorm.py
+@o WWMmut.py
 @{
 @<WWM@>
 if __name__=="__main__":
@@ -950,13 +954,118 @@ if __name__=="__main__":
         print "Usage: %s specfile jsonparfile scans"
         raise
     dataset = WWMdataset( fname, pars )
-    dataset.norm( scans )
+    dataset.mut( scans )
     dataset.pars.save(sys.argv[2])
 @}
 
 \subsection{Peak searching}
 
+Assuming we have all calibrated we want to correct the data 
+for the mut and go look for peaks.
 
+@d WWMabsprof
+@{
+    def absprof(self, scans):
+        """
+	absorbtion profile.
+	Takes log(signal) / abs(sin(angle))
+        """
+        a = self.getAngle(scans)
+        s = self.getSignal(scans)
+        a0 = self.pars.zeroAngle
+	self.angle = a-a0
+	x = abssindeg(self.angle) # changes per run
+	mut = self.pars.mut
+        corr = -mut-np.log(s)*x
+	self.corr = corr
+@}      
+
+
+@d WWMpeaksearch
+@{
+    def peaksearch(self, scans, filename, npxmin=10, plot=True):
+        """ 
+        finds peaks in self.corr
+	"""
+	if not hasattr(self,"corr"):
+	    self.absprof( scans )
+	# median is the background
+	ang = self.angle
+	sm = np.median(self.corr)
+    	# sigma level
+    	st = self.corr.std()
+	threshold = sm+st # 1 sigma
+	pcorr = self.corr
+	acorr = ang*self.corr
+	print self.corr.shape, ang.shape
+   	a2corr = ang*acorr
+    	pcorr.shape = pcorr.shape[0],1
+    	acorr.shape = pcorr.shape[0],1
+    	a2corr.shape = pcorr.shape[0],1
+    	# label array
+    	b = np.zeros( pcorr.shape, np.int)
+    	print "Searching in ",b.shape,
+    	npks = connectedpixels( pcorr, b, threshold, 0 )
+    	print "found",npks,"peaks"
+    	#
+    	sig_pks = blobproperties( pcorr, b, npks, 0)
+    	ang_pks = blobproperties( acorr , b, npks, 0)
+    	ang2_pks = blobproperties( a2corr , b, npks, 0)
+    	# we want:
+    	#  npx
+    	npx = sig_pks[:,s_1]
+    	# Filter out anything with less than npxmin pixels
+    	msk = npx >= npxmin
+    	#  centroid in angle (sum ints*a / sum(ints)
+    	print "After removing znigers",npks
+    	centroids = np.compress( msk, ang_pks[:,s_I]/sig_pks[:,s_I])
+    	#  area or height ?
+    	areas = np.compress( msk, sig_pks[:,s_I] )
+    	heights = np.compress( msk, sig_pks[:,mx_I] )
+	# width 
+	low = np.compress( msk, sig_pks[:,bb_mn_f]).astype(int)
+	high = np.compress( msk, sig_pks[:,bb_mx_f]).astype(int)
+	widths = ang[high] - ang[low]
+	# sigma
+	# sum( x*x*I )
+    	xxI = np.compress( msk, ang2_pks[:,s_I])
+	vari = xxI / areas - centroids*centroids
+	stof = 8*np.log(2)
+	sigma = np.sqrt( abs( vari )*stof )
+	if plot:
+	    pylab.plot(self.angle,self.corr,",")
+	    pylab.plot(centroids, heights,"+")
+	    pylab.plot(centroids-widths/2, heights*0.3,"|")   
+	    pylab.plot(centroids+widths/2, heights*0.3,"|")   
+	    pylab.plot(centroids-sigma/2, heights*0.5,"|")   
+	    pylab.plot(centroids+sigma/2, heights*0.5,"|")   
+	    pylab.show()
+	self.pars.centroids = list(centroids)
+	self.pars.areas = list(areas)
+	self.pars.widths = list(widths)
+	self.pars.heights = list(heights)
+	self.pars.save( filename )	
+	return centroids, areas, widths, heights
+@}
+
+
+@o WWMpeaksearch.py
+@{
+@<WWM@>
+if __name__=="__main__":
+    import sys
+    try:
+        fname = sys.argv[1]
+        pars = WWMpar()
+        pars.load(sys.argv[2])
+	outfile = sys.argv[3]
+        scans = [int(v) for v in sys.argv[4:]]
+    except:
+        print "Usage: %s specfile jsonparfile scans"
+        raise
+    dataset = WWMdataset( fname, pars )
+    dataset.peaksearch(scans, outfile)
+@}
 
 
 
@@ -1574,7 +1683,7 @@ def find_peaks( ang, sig, npxmin = 10 ):
     Find connected groups of pixels...
     """
     from ImageD11.connectedpixels import blobproperties, connectedpixels,\
-        blob_moments, s_1, s_I, mx_I
+        blob_moments, s_1, s_I, mx_I, mn_f, mx_s
     import numpy as np
     # median is the background
     sm = np.median(sig)
