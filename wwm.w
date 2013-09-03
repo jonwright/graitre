@@ -31,6 +31,17 @@ Data reduction and wavelength fitting code for such data are developed here.
 
 \tableofcontents
 
+\section{TODO}
+
+- Number of peaks versus exposure time is not constant when using
+ the sigma threshold. More peaks for shorter time.
+- improve mut fitting (single lsq seems best)
+- single gui to open file, calib offsets, fit mut and peaksearch.
+- peak assignment to hkls
+
+
+
+
 \section{Introduction}
 
 A fast scan has been developed to measure the extinction diffraction
@@ -726,6 +737,52 @@ if __name__=="__main__":
 Numerically we could evaluate derivatives using the code above
 for some parameters: ...
 
+\subsection{ Refactor that to make a crystal }
+
+We recycle the WWMpar code via inheritance to make a crystal object:
+
+@d WWMcrystal
+@{
+class WWMcrystal( WWMpar ):
+    a = 5.43094 # silicon, value to be debated.
+
+    def set_wvln(self, wvln):
+    	self.wvln = wvln
+
+    def generatehkls( self.a, wvln ):
+        """
+        Generate all of the hkls which can be reached 
+        a is the cubic unit cell parameter
+        """
+        uc = unitcell.unitcell( [ self.a,self.a,self.a,90,90,90],"F" )
+        uc.gethkls_xfab( 2.0/self.wvln, "Fd-3m" ) 
+        self.hkls = np.array([p[1] for p in uc.peaks])
+        return self.hkls
+
+
+@}
+
+\subsection{ Diffractometer class }
+
+This takes a crystal (list of hkls, perhaps intensity) and uses an orientation
+to get computed omega angles and derivatives.
+
+@d WWMdiffractometer
+@{
+class WWMdiffractometer( object ):
+    def __init__(self, crystal, u, axistilt=0):
+        """
+        crystal is a WWMcrystal instance (gives hkl list)
+        u is a 3x3 orthogonal rotation matrix (z on axis)
+        axistilt (radians) is the angle between the axis and
+                 the plane perpendicular to the beam
+        """
+        self.crystal = crystal
+        self.u = u
+        self.axistilt = axistilt
+
+
+@}   
 
 \subsection{ The user interface }
 
@@ -1065,6 +1122,37 @@ if __name__=="__main__":
         raise
     dataset = WWMdataset( fname, pars )
     dataset.peaksearch(scans, outfile)
+@}
+
+
+\section{Assignment of peaks}
+
+Given two lists of peaks try to match up which ones should go together.
+This can be observed and computed peaks or also peaks from two 
+different samples.
+We will assume both sets of peaks come in sorted order.
+
+@d matchpeaks
+@{
+
+def matchpeaks(x1, x2, tol=0.1):
+    """
+    Match up two peaks lists x1 and x1 assuming both are sorted
+    all matches within tol are returned
+    """
+    i1 = 0
+    i2 = 0
+    matches = []
+    while i1<len(x1) and i2<len(x2):
+        v1 = x1[i1]
+        v2 = x2[i2] 
+        if abs(v1-v2) < tol:
+            matches.append( (i1, i2) )
+        if v1>v2: 
+            i2 += 1
+        else:
+            i1 += 1        
+    return matches
 @}
 
 
