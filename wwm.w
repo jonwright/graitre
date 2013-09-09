@@ -1,3 +1,4 @@
+% -*- indent-tabs-mode:nil -*-
 % nuweb formatted latex document for ID11 processing.
 % 
 % Please stay within 80 characters
@@ -534,6 +535,62 @@ def tandeg(x):
     return np.tan(np.radians(x))
 
 @<rotationmatrices@>
+
+@<atan2dvecs@>  
+
+
+@}
+
+A quick bit of code for finding the angle between a pair of vectors in 2D,
+and also the derivatives. 
+Just to explain the cross product part in there. 
+We want the angle between the two vectors $k_{xy}$ and $g_{xy}$
+which are in the $xy$ plane. 
+We consider them as 3D vectors $k_x,k_y,0$ and $g_x,g_y,0$.
+Now the cross product is up the z axis and the length
+is $k_x.g_y - k_y.g_x$ which is equal to $|k||g|sin(\theta)$.
+We then mix this with the sin and atan2 to get the angle we
+want
+Due to laziness we call upon sympy to check the derivatives.
+
+@o vec2anglesdiff.py
+@{
+from sympy import Symbol, diff, atan2, simplify
+a,b,c,d = [Symbol(x) for x in 'abcd']
+e = atan2( a*d - b*c, a*c + b*d) 
+print e
+for s in a,b,c,d:
+    print s,":",simplify(diff(e,s))
+@}
+
+The output of the script is:
+
+\begin{verbatim}
+atan2(a*d - b*c, a*c + b*d)
+a : b/(a**2 + b**2)
+b : -a/(a**2 + b**2)
+c : -d/(c**2 + d**2)
+d : c/(c**2 + d**2)
+\end{verbatim}
+
+We use this below:
+
+@d atan2dvecs 
+@{
+def anglevecs2D(a, b, c, d):
+    return np.arctan2( a*d - b*c, a*c + b*d) 
+    
+def derivanglevecs2d( a, b, c, d, ab2=None, cd2=None):
+    if ab is None: 
+        ab2 = a*a+b*b
+    if cd is None:
+        cd2 = c*c+d*d
+    return {
+            'a':  b / ab,
+            'b': -a / ab,
+            'c': -d / cd,
+            'd':  c / cd,
+            }
 @}
 
 
@@ -857,7 +914,7 @@ matrix definitions the right way around too.
 
 def testwvln():
     print "test wvln"
-    c = maketestobj()
+    c = maketestcrystal()
     # now test the derivatives are OK or not
     g0 = c.gve.copy()
     c.set_wvln( 1.001 )
@@ -871,7 +928,7 @@ def testwvln():
 
 def testrot(axis):
     print "testrot",axis
-    c = maketestobj()
+    c = maketestcrystal()
     # now test the derivatives are OK or not
     g0 = c.gve.copy()
     # rotation around the x axis
@@ -918,9 +975,11 @@ class WWMdiffractometer( object ):
 @<computek@>
 @<computeomegas@>
 
-    def calcall(self):
+    def calcall(self, debug=False):
         self.computek()
-        self.computeomegas()
+        self.computeomegas(debug)
+
+@<derivDiffractometer@>
 @}   
 
 The first part is to compute the k vectors for a given crystal (eg, the 
@@ -939,12 +998,14 @@ From the Milch and Minor magic:
         self.kz = g[2,:]
         num = - (self.modg2 - 2*self.axistilt*self.kz)
         den = 2*np.sqrt( 1 - self.axistilt*self.axistilt )
+	# Normally axistilt should be a smallish number
         self.kx = num / den
 	# Some peaks never diffract as they are up the axis
 	arg = self.modg2 - self.kx*self.kx - self.kz*self.kz
+	self.mask = arg < 0
+	# Allow sqrt negative as nan for now
         self.ky1 = np.sqrt( arg )
         self.ky2 = -self.ky1
-	self.mask = arg < 0
 @}
 
 
@@ -952,17 +1013,24 @@ And now for the angles, given the k and g vectors:
 
 @d computeomegas
 @{
-    def computeomegas(self):
+    def computeomegas(self, debug = False):
         g = self.crystal.gve
         gx = g[0,:]
         gy = g[1,:]
         gz = g[2,:]
-        gxy = np.sqrt( gx*gx + gy*gy ) 
-        self.phi = np.arctan2( gy, gx )
-        arccosomegaplusphi = np.arccos( self.kx / gxy )
-        self.omega1 = arccosomegaplusphi - self.phi
-        self.omega2 = -arccosomegaplusphi - self.phi 
+	if debug:
+            # This is the goniometer equation method, a bit complex
+            modgxy = np.sqrt( gx*gx + gy*gy ) 
+            self.phi = np.arctan2( gy, gx )
+            arccosomegaplusphi = np.arccos( self.kx / modgxy )
+            self.omega3 = arccosomegaplusphi - self.phi
+            self.omega4 = -arccosomegaplusphi - self.phi
+        self.omega1  = anglevecs2D( gx, gy, self.kx, self.ky1)
+        self.omega2  = anglevecs2D( gx, gy, self.kx, self.ky2)
 @}
+
+
+
         
 And a quick testcase for the diffractometer stuff:
 
@@ -970,12 +1038,14 @@ And a quick testcase for the diffractometer stuff:
 @{
 def testdiff1():
     d = WWMdiffractometer( maketestcrystal() )
-    d.calcall()
+    d.calcall(debug=True)
     #print d.crystal.gve.shape
-    #for i in range(50):
-    #    print i,d.crystal.gve[:,i],d.modg2[i]
-    #    print d.kx[i],d.ky1[i],d.kz[i]
-    #    print d.phi[i],d.omega1[i],d.omega2[i],d.mask[i]
+    for i in range(50):
+        print i,d.crystal.gve[:,i],d.modg2[i]
+        print d.kx[i],d.ky1[i],d.kz[i]
+        for x in (d.phi[i],d.omega1[i],d.omega2[i],d.mask[i],d.omega3[i],d.omega4[i]):
+            print np.degrees(angmod(x)),
+	print
 @}
 
 
@@ -990,6 +1060,39 @@ def testdiff1():
 @<testdiff1@>
 if __name__=="__main__":
    testdiff1()
+@}
+
+\subsection{Angle derivatives }
+
+Finally, the part we have all been waiting for.
+Derivatives of the angles of the hkl reflections with respect to the 
+variables.
+
+
+@d derivDiffractometer
+@{
+    # ['wvln', 'rotx', 'roty', 'rotz']
+    VARIABLES=  WWMcrystal.VARIABLES + [
+       'axistilt' ]
+    def generate_derivatives(self):
+        # g = self.crystal.gve
+        # self.modg2 = (g*g).sum(axis=0)
+        # we have dg/dv in self.crystal.derivatives
+        dg = self.crystal.derivatives
+        # dict comprehensions, python 2.7+
+        dkzdv = dict( (v,  dg[v][:,2]) 
+                for v  in WWMcrystal.VARIABLES )
+        dmodg2dv = dict( (v, (2 * g * dg[v]).sum(axis=0) )
+                for v in WWMcrystal.VARIABLES  )
+        # num = - (self.modg2 - 2*self.axistilt*self.kz)
+        dnumdv = - ( dmodg2dv ) * FIXMEHERE
+        # den = 2*np.sqrt( 1 - self.axistilt*self.axistilt )
+
+        
+
+
+               
+
 @}
 
 
