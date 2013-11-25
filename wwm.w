@@ -1012,12 +1012,12 @@ From the Milch and Minor magic:
         self.kz = g[2,:]
         num = - (self.modg2 - 2*self.axistilt*self.kz)
         den = 2*np.sqrt( 1 - self.axistilt*self.axistilt )
-	# Normally axistilt should be a smallish number
+        # Normally axistilt should be a smallish number
         self.kx = num / den
-	# Some peaks never diffract as they are up the axis
-	arg = self.modg2 - self.kx*self.kx - self.kz*self.kz
-	self.mask = arg < 0
-	# Allow sqrt negative as nan for now
+        # Some peaks never diffract as they are up the axis
+        arg = self.modg2 - self.kx*self.kx - self.kz*self.kz
+        self.mask = arg < 0
+        # Allow sqrt negative as nan for now
         self.ky1 = np.sqrt( arg )
         self.ky2 = -self.ky1
 @}
@@ -1032,7 +1032,7 @@ And now for the angles, given the k and g vectors:
         gx = g[0,:]
         gy = g[1,:]
         gz = g[2,:]
-	if debug:
+        if debug:
             # This is the goniometer equation method, a bit complex
             modgxy = np.sqrt( gx*gx + gy*gy ) 
             self.phi = np.arctan2( gy, gx )
@@ -1059,7 +1059,7 @@ def testdiff1():
         print d.kx[i],d.ky1[i],d.kz[i]
         for x in (d.phi[i],d.omega1[i],d.omega2[i],d.mask[i],d.omega3[i],d.omega4[i]):
             print np.degrees(angmod(x)),
-	print
+    print
 @}
 
 
@@ -1401,7 +1401,7 @@ for the mut and go look for peaks.
         # Filter out anything with less than npxmin pixels
         msk = npx >= npxmin
         #  centroid in angle (sum ints*a / sum(ints)
-        print "After removing znigers",npks
+        print "After removing zingers",npks
         centroids = np.compress( msk, ang_pks[:,s_I]/sig_pks[:,s_I])
         #  area or height ?
         areas = np.compress( msk, sig_pks[:,s_I] )
@@ -1562,6 +1562,8 @@ scans = [int(i) for i in sys.argv[3:]]
 print scans
 
 print "Usage: specfile dummypars darknum floodnum scan0 scan1 ..."
+print "for example: WWM_process.py wwm_42kev_23092013.spc wwmfrz.json  0 1 2 3 4
+5 6 7 8 9 10"
 
 def ex(s):
     print s
@@ -1903,7 +1905,7 @@ def _wwm_scan(start, end, nstep, ctime)'{
  totaltime = nstep * ctime
  totalsteps = (end - start)*motor_par(WWM_MOTOR_N, "step_size")
 
- # compute motor speed required 	
+ # compute motor speed required	
  velocity = totalsteps/totaltime 
 
  if( velocity > motor_par( WWM_MOTOR_N, "config_velocity" )){
