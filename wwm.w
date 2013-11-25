@@ -672,7 +672,21 @@ if __name__=="__main__":
 Assuming we have read in one or several spec files we need to 
 fit them to extract the $\mu t$ and wafer zero angle.
 
-
+@O wwmfrz.json
+@{
+{
+    "chanAngle": "CH2",
+    "chanMonit": "CH5",
+    "chanTrans": "CH6",
+    "mut": 0.017244892180296886,
+    "scaleAngle": 17493.333330000001,
+    "scaleMonit": -189161910.72070956,
+    "scaleTrans": -167473298.25006324,
+    "zeroAngle": -0.058586303894149205,
+    "zeroMonit": 655356.36976666667,
+    "zeroTrans": 471232.09580000001
+}
+@}
 
 \subsection{ Programs }
 
@@ -976,7 +990,7 @@ peaks.
             mut = -1/p[0]
             a0a = tandeg(af-a0)*(sf*mut/x + 1)
             a00 = np.median(a0a)
-            if debug: 
+            if debug or i == ncycle-1: 
                 print "mut is",mut, p
                 pylab.figure()
                 pylab.plot(x*np.sign(af-a0), sf,",")
@@ -1011,7 +1025,7 @@ if __name__=="__main__":
         print "Usage: %s specfile jsonparfile scans"
         raise
     dataset = WWMdataset( fname, pars )
-    dataset.mut( scans )
+    dataset.mut( scans, debug = False )
     dataset.pars.save(sys.argv[2])
 @}
 
@@ -1074,7 +1088,7 @@ for the mut and go look for peaks.
     	# Filter out anything with less than npxmin pixels
     	msk = npx >= npxmin
     	#  centroid in angle (sum ints*a / sum(ints)
-    	print "After removing znigers",npks
+    	print "After removing zingers",npks
     	centroids = np.compress( msk, ang_pks[:,s_I]/sig_pks[:,s_I])
     	#  area or height ?
     	areas = np.compress( msk, sig_pks[:,s_I] )
@@ -1157,7 +1171,7 @@ def matchpeaks(x1, x2, tol=0.1):
 
 
 
-\section{User interface }
+\section{User interface}
 
 This needs to be fixed. Life is short.
 For now we will just hack something together using matplotlib 
@@ -1217,6 +1231,39 @@ def UIgetxy( title, x, ylist):
 @<UIgetrange@>
 @<UIgetxy@>
 @}
+
+\subsection{ Running all the programs in order }
+
+@O WWM_process.py
+@{
+
+import sys, os, shutil
+
+specfile = sys.argv[1]
+dummypars = sys.argv[2]
+parfile = specfile + ".json"
+pkpars = specfile + "_pks.json"
+scans = [int(i) for i in sys.argv[3:]]
+print scans
+
+print "Usage: specfile dummypars darknum floodnum scan0 scan1 ..."
+
+def ex(s):
+    print s
+    os.system(s)
+
+# copy z:\crystallography\jon\sept13\wwm_edges\wwm_42kev_23092013.spc .
+shutil.copyfile("wwmfrz.json",parfile)
+ex("python WWMcalib.py %s %s %d %d"%(
+    specfile, parfile, scans[0], scans[1]))
+s = "python WWMmut.py %s %s %d %d %d"%(
+    specfile, parfile, scans[2],scans[-1],(scans[-1]-scans[2])/2+scans[2])
+ex(s)
+s = "python WWMpeaksearch.py %s %s %s "%(specfile, parfile, pkpars)
+s += " ".join([str(i) for i in scans[2:]])
+ex(s)
+@}
+
 
 \section{Experimental}
 
