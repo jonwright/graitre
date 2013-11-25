@@ -1,3 +1,4 @@
+% -*- indent-tabs-mode:nil -*-
 % nuweb formatted latex document for ID11 processing.
 % 
 % Please stay within 80 characters
@@ -292,7 +293,7 @@ After the small change, for example $r_z$ about $z$ we have:
 
 \[ \mathbf{g} = (g_x\cos{r_z} + g_y\sin{r_z})\mathbf{i} +
    	        (-g_x\sin{r_z} + g_y\cos{r_z})\mathbf{j} +
-		g_z\mathbf{k} \]
+                g_z\mathbf{k} \]
 \[ \frac{d\mathbf{g}}{dr_z} = 
    (-g_x\sin{r_z} + g_y\cos{r_z})\mathbf{i} +
    (-g_x\cos{r_z} - g_y\sin{r_z})\mathbf{j} \]
@@ -533,6 +534,63 @@ def tandeg(x):
     """ tangent of angle in degrees """
     return np.tan(np.radians(x))
 
+@<rotationmatrices@>
+
+@<atan2dvecs@>  
+
+
+@}
+
+A quick bit of code for finding the angle between a pair of vectors in 2D,
+and also the derivatives. 
+Just to explain the cross product part in there. 
+We want the angle between the two vectors $k_{xy}$ and $g_{xy}$
+which are in the $xy$ plane. 
+We consider them as 3D vectors $k_x,k_y,0$ and $g_x,g_y,0$.
+Now the cross product is up the z axis and the length
+is $k_x.g_y - k_y.g_x$ which is equal to $|k||g|sin(\theta)$.
+We then mix this with the sin and atan2 to get the angle we
+want
+Due to laziness we call upon sympy to check the derivatives.
+
+@o vec2anglesdiff.py
+@{
+from sympy import Symbol, diff, atan2, simplify
+a,b,c,d = [Symbol(x) for x in 'abcd']
+e = atan2( a*d - b*c, a*c + b*d) 
+print e
+for s in a,b,c,d:
+    print s,":",simplify(diff(e,s))
+@}
+
+The output of the script is:
+
+\begin{verbatim}
+atan2(a*d - b*c, a*c + b*d)
+a : b/(a**2 + b**2)
+b : -a/(a**2 + b**2)
+c : -d/(c**2 + d**2)
+d : c/(c**2 + d**2)
+\end{verbatim}
+
+We use this below:
+
+@d atan2dvecs 
+@{
+def anglevecs2D(a, b, c, d):
+    return np.arctan2( a*d - b*c, a*c + b*d) 
+    
+def derivanglevecs2d( a, b, c, d, ab2=None, cd2=None):
+    if ab is None: 
+        ab2 = a*a+b*b
+    if cd is None:
+        cd2 = c*c+d*d
+    return {
+            'a':  b / ab,
+            'b': -a / ab,
+            'c': -d / cd,
+            'd':  c / cd,
+            }
 @}
 
 
@@ -728,7 +786,7 @@ if __name__=="__main__":
    gve = np.dot(ub, hkls.T )
    sol1, sol2, valid = gv_general.g_to_k( gve, wvln, axis=[0,0,-1] )
    tth, eta, omega = transform.uncompute_g_vectors(
-   	  gve, wvln)
+         gve, wvln)
    omega = angmoddeg(omega)
    sol1 = angmoddeg(sol1)
    sol2 = angmoddeg(sol2)
@@ -739,7 +797,7 @@ if __name__=="__main__":
    print "#  h   k   l   gx       gy       gz        om1      om2     ok  prec"
    for i in range(len(gve[0])):
         print ("%4d"*3)%tuple(hkls[i]),(" %8.5f"*3)%(tuple(gve[:,i])),
-	if valid[i]: 
+        if valid[i]: 
             print (" % 6.2f"*2)%(sol1[i],sol2[i])," valid",
         else:
             print "   NaN    NaN   invalid",
@@ -761,9 +819,12 @@ class WWMcrystal( WWMpar ):
     a = 5.43094 # silicon, value to be debated.
 
     def set_wvln(self, wvln):
-    	self.wvln = wvln
+        self.wvln = wvln
+        self.bmatrix = [ [ wvln/self.a, 0, 0],
+                         [ 0,  wvln/self.a, 0],
+                         [ 0,  0, wvln/self.a] ]
 
-    def generatehkls( self.a, wvln ):
+    def generate_hkls( self ):
         """
         Generate all of the hkls which can be reached 
         a is the cubic unit cell parameter
@@ -773,8 +834,139 @@ class WWMcrystal( WWMpar ):
         self.hkls = np.array([p[1] for p in uc.peaks])
         return self.hkls
 
+    def set_orientation( self, umatrix):
+        """ 3x3 list please """
+        self.umatrix = umatrix
+
+@< generategve @>
+@< crystalderivatives @>
+
+    def calcall( self ):
+        self.generate_hkls()
+        self.generate_gve()
+        self.generate_derivatives()
+
+
+def maketestcrystal():
+    c = WWMcrystal()
+    c.set_wvln( 1.0 )
+    u0= np.dot( np.dot(  rotmatx(0.1),rotmaty(0.2)),rotmatz(0.3))
+    c.set_orientation( u0 )
+    c.calcall()
+    return c
 
 @}
+
+Now we get to the fun parts, computing the peak positions and their
+derivatives. 
+We make this the job of the crystal object.
+
+First we will compute the g-vectors corresponding to the hkls and u (and the
+b matrix). 
+The bmatrix here carries the wavelength term as well as cell parameter.
+
+@d generategve
+@{
+    def generate_gve(self):
+        assert len(self.hkls)>1
+        self.ub = np.dot( self.umatrix, self.bmatrix )
+        self.gve = np.dot( self.ub, self.hkls.T )
+@}
+        
+And now some derivatives. 
+These are for the gvectors. 
+Surprisingly painless.
+
+@d crystalderivatives 
+@{
+    VARIABLES = ['wvln', 'rotx', 'roty', 'rotz']
+    def generate_derivatives(self):
+        self.derivatives = {}
+        # wavelength 
+        # db / dwvln
+        self.derivatives['wvln'] = self.gve / self.wvln
+        self.derivatives['rotx'] = np.cross( self.gve.T, [1,0,0] ).T
+        self.derivatives['roty'] = np.cross( self.gve.T, [0,1,0] ).T
+        self.derivatives['rotz'] = np.cross( self.gve.T, [0,0,1] ).T
+@}
+
+Functions to make the rotation matrices which correspond
+to rotations around x, y and z
+
+@d rotationmatrices
+@{
+def rotmatx(r):
+    """ r is in radians """
+    c = np.cos(r)
+    s = np.sin(r)
+    return [ [ 1,0,0], [0, c, s], [0,-s,c] ]
+def rotmaty(r):
+    """ r is in radians """
+    c = np.cos(r)
+    s = np.sin(r)
+    return [ [ c,0,-s], [0, 1, 0], [s,0,c] ]
+def rotmatz(r):
+    """ r is in radians """
+    c = np.cos(r)
+    s = np.sin(r)
+    return [ [ c,s,0], [-s, c, 0], [0,0,1] ]
+
+@}
+
+Finally a testcase for the WWMcrystal, to check we have the rotation
+matrix definitions the right way around too.
+
+@o testcrystal.py
+@{
+@<imports@>
+@<utilities@>
+@<WWMpar@>
+@<WWMcrystal@>
+
+
+
+
+def testwvln():
+    print "test wvln"
+    c = maketestcrystal()
+    # now test the derivatives are OK or not
+    g0 = c.gve.copy()
+    c.set_wvln( 1.001 )
+    c.generate_gve()
+    dgdw = (c.gve - g0)/0.001
+    err = abs( dgdw - c.derivatives['wvln'] ).ravel()
+    iworst = err.argmax()
+    assert err[iworst] < 1e-6
+    #  print err[iworst],dgdw[:,iworst/3]-c.derivatives['wvln'][:,iworst/3],
+    # print c.derivatives['wvln'][:,iworst/3]
+
+def testrot(axis):
+    print "testrot",axis
+    c = maketestcrystal()
+    # now test the derivatives are OK or not
+    g0 = c.gve.copy()
+    # rotation around the x axis
+    dx = 1e-6
+    if axis == 'x': dr = rotmatx(dx)
+    if axis == 'y': dr = rotmaty(dx)
+    if axis == 'z': dr = rotmatz(dx)
+    c.set_orientation( np.dot(dr, c.umatrix ) )
+    c.generate_gve()
+    dgdr = (c.gve - g0)/dx
+    key = 'rot'+axis
+    err = abs( dgdr - c.derivatives[key] )
+#    for i in range(0,910,1):
+#    	print i,dgdr[:,i],err[:,i]
+    iworst = err.ravel().argmax()
+#    print err.ravel()[iworst]
+    assert err.ravel()[iworst] < 1e-6
+if __name__=="__main__":
+   testwvln()
+   for axis in ('x','y','z'):
+      testrot(axis)
+
+@}
+
 
 \subsection{ Diffractometer class }
 
@@ -784,19 +976,139 @@ to get computed omega angles and derivatives.
 @d WWMdiffractometer
 @{
 class WWMdiffractometer( object ):
-    def __init__(self, crystal, u, axistilt=0):
+    def __init__(self, crystal, axistilt=0):
         """
         crystal is a WWMcrystal instance (gives hkl list)
         u is a 3x3 orthogonal rotation matrix (z on axis)
-        axistilt (radians) is the angle between the axis and
+        axistilt sin(radians) is the sin of the angle between the axis and
                  the plane perpendicular to the beam
         """
         self.crystal = crystal
-        self.u = u
         self.axistilt = axistilt
 
+@<computek@>
+@<computeomegas@>
 
+    def calcall(self, debug=False):
+        self.computek()
+        self.computeomegas(debug)
+
+@<derivDiffractometer@>
 @}   
+
+The first part is to compute the k vectors for a given crystal (eg, the 
+scattering vectors at the moment diffraction occurs).
+Not all peaks can be measured, some will be along the axis. 
+These are noted by self.mask.
+From the Milch and Minor magic:
+
+@d computek
+@{
+    def computek(self):
+        """ This is from Milch and Minor 1974 """
+        self.crystal.calcall()
+        g = self.crystal.gve
+        self.modg2 = (g*g).sum(axis=0)
+        self.kz = g[2,:]
+        num = - (self.modg2 - 2*self.axistilt*self.kz)
+        den = 2*np.sqrt( 1 - self.axistilt*self.axistilt )
+	# Normally axistilt should be a smallish number
+        self.kx = num / den
+	# Some peaks never diffract as they are up the axis
+	arg = self.modg2 - self.kx*self.kx - self.kz*self.kz
+	self.mask = arg < 0
+	# Allow sqrt negative as nan for now
+        self.ky1 = np.sqrt( arg )
+        self.ky2 = -self.ky1
+@}
+
+
+And now for the angles, given the k and g vectors:
+
+@d computeomegas
+@{
+    def computeomegas(self, debug = False):
+        g = self.crystal.gve
+        gx = g[0,:]
+        gy = g[1,:]
+        gz = g[2,:]
+	if debug:
+            # This is the goniometer equation method, a bit complex
+            modgxy = np.sqrt( gx*gx + gy*gy ) 
+            self.phi = np.arctan2( gy, gx )
+            arccosomegaplusphi = np.arccos( self.kx / modgxy )
+            self.omega3 = arccosomegaplusphi - self.phi
+            self.omega4 = -arccosomegaplusphi - self.phi
+        self.omega1  = anglevecs2D( gx, gy, self.kx, self.ky1)
+        self.omega2  = anglevecs2D( gx, gy, self.kx, self.ky2)
+@}
+
+
+
+        
+And a quick testcase for the diffractometer stuff:
+
+@d testdiff1
+@{
+def testdiff1():
+    d = WWMdiffractometer( maketestcrystal() )
+    d.calcall(debug=True)
+    #print d.crystal.gve.shape
+    for i in range(50):
+        print i,d.crystal.gve[:,i],d.modg2[i]
+        print d.kx[i],d.ky1[i],d.kz[i]
+        for x in (d.phi[i],d.omega1[i],d.omega2[i],d.mask[i],d.omega3[i],d.omega4[i]):
+            print np.degrees(angmod(x)),
+	print
+@}
+
+
+@o testdiff.py
+@{
+
+@<imports@>
+@<utilities@>
+@<WWMpar@>
+@<WWMcrystal@>
+@<WWMdiffractometer@>
+@<testdiff1@>
+if __name__=="__main__":
+   testdiff1()
+@}
+
+\subsection{Angle derivatives }
+
+Finally, the part we have all been waiting for.
+Derivatives of the angles of the hkl reflections with respect to the 
+variables.
+
+
+@d derivDiffractometer
+@{
+    # ['wvln', 'rotx', 'roty', 'rotz']
+    VARIABLES=  WWMcrystal.VARIABLES + [
+       'axistilt' ]
+    def generate_derivatives(self):
+        # g = self.crystal.gve
+        # self.modg2 = (g*g).sum(axis=0)
+        # we have dg/dv in self.crystal.derivatives
+        dg = self.crystal.derivatives
+        # dict comprehensions, python 2.7+
+        dkzdv = dict( (v,  dg[v][:,2]) 
+                for v  in WWMcrystal.VARIABLES )
+        dmodg2dv = dict( (v, (2 * g * dg[v]).sum(axis=0) )
+                for v in WWMcrystal.VARIABLES  )
+        # num = - (self.modg2 - 2*self.axistilt*self.kz)
+        dnumdv = - ( dmodg2dv ) * FIXMEHERE
+        # den = 2*np.sqrt( 1 - self.axistilt*self.axistilt )
+
+        
+
+
+               
+
+@}
+
 
 \subsection{ The user interface }
 
@@ -1038,17 +1350,17 @@ for the mut and go look for peaks.
 @{
     def absprof(self, scans):
         """
-	absorbtion profile.
-	Takes log(signal) / abs(sin(angle))
+        absorbtion profile.
+        Takes log(signal) / abs(sin(angle))
         """
         a = self.getAngle(scans)
         s = self.getSignal(scans)
         a0 = self.pars.zeroAngle
-	self.angle = a-a0
-	x = abssindeg(self.angle) # changes per run
-	mut = self.pars.mut
+        self.angle = a-a0
+        x = abssindeg(self.angle) # changes per run
+        mut = self.pars.mut
         corr = -mut-np.log(s)*x
-	self.corr = corr
+        self.corr = corr
 @}      
 
 
@@ -1057,66 +1369,67 @@ for the mut and go look for peaks.
     def peaksearch(self, scans, filename, npxmin=10, plot=True):
         """ 
         finds peaks in self.corr
-	"""
-	if not hasattr(self,"corr"):
-	    self.absprof( scans )
-	# median is the background
-	ang = self.angle
-	sm = np.median(self.corr)
-    	# sigma level
-    	st = self.corr.std()
-	threshold = sm+st # 1 sigma
-	pcorr = self.corr
-	acorr = ang*self.corr
-	print self.corr.shape, ang.shape
-   	a2corr = ang*acorr
-    	pcorr.shape = pcorr.shape[0],1
-    	acorr.shape = pcorr.shape[0],1
-    	a2corr.shape = pcorr.shape[0],1
-    	# label array
-    	b = np.zeros( pcorr.shape, np.int)
-    	print "Searching in ",b.shape,
-    	npks = connectedpixels( pcorr, b, threshold, 0 )
-    	print "found",npks,"peaks"
-    	#
-    	sig_pks = blobproperties( pcorr, b, npks, 0)
-    	ang_pks = blobproperties( acorr , b, npks, 0)
-    	ang2_pks = blobproperties( a2corr , b, npks, 0)
-    	# we want:
-    	#  npx
-    	npx = sig_pks[:,s_1]
-    	# Filter out anything with less than npxmin pixels
-    	msk = npx >= npxmin
-    	#  centroid in angle (sum ints*a / sum(ints)
-    	print "After removing zingers",npks
-    	centroids = np.compress( msk, ang_pks[:,s_I]/sig_pks[:,s_I])
-    	#  area or height ?
-    	areas = np.compress( msk, sig_pks[:,s_I] )
-    	heights = np.compress( msk, sig_pks[:,mx_I] )
-	# width 
-	low = np.compress( msk, sig_pks[:,bb_mn_f]).astype(int)
-	high = np.compress( msk, sig_pks[:,bb_mx_f]).astype(int)
-	widths = ang[high] - ang[low]
-	# sigma
-	# sum( x*x*I )
-    	xxI = np.compress( msk, ang2_pks[:,s_I])
-	vari = xxI / areas - centroids*centroids
-	stof = 8*np.log(2)
-	sigma = np.sqrt( abs( vari )*stof )
-	if plot:
-	    pylab.plot(self.angle,self.corr,",")
-	    pylab.plot(centroids, heights,"+")
-	    pylab.plot(centroids-widths/2, heights*0.3,"|")   
-	    pylab.plot(centroids+widths/2, heights*0.3,"|")   
-	    pylab.plot(centroids-sigma/2, heights*0.5,"|")   
-	    pylab.plot(centroids+sigma/2, heights*0.5,"|")   
-	    pylab.show()
-	self.pars.centroids = list(centroids)
-	self.pars.areas = list(areas)
-	self.pars.widths = list(widths)
-	self.pars.heights = list(heights)
-	self.pars.save( filename )	
-	return centroids, areas, widths, heights
+
+        """
+        if not hasattr(self,"corr"):
+            self.absprof( scans )
+        # median is the background
+        ang = self.angle
+        sm = np.median(self.corr)
+        # sigma level
+        st = self.corr.std()
+        threshold = sm+st # 1 sigma
+        pcorr = self.corr
+        acorr = ang*self.corr
+        print self.corr.shape, ang.shape
+        a2corr = ang*acorr
+        pcorr.shape = pcorr.shape[0],1
+        acorr.shape = pcorr.shape[0],1
+        a2corr.shape = pcorr.shape[0],1
+        # label array
+        b = np.zeros( pcorr.shape, np.int)
+        print "Searching in ",b.shape,
+        npks = connectedpixels( pcorr, b, threshold, 0 )
+        print "found",npks,"peaks"
+        #
+        sig_pks = blobproperties( pcorr, b, npks, 0)
+        ang_pks = blobproperties( acorr , b, npks, 0)
+        ang2_pks = blobproperties( a2corr , b, npks, 0)
+        # we want:
+        #  npx
+        npx = sig_pks[:,s_1]
+        # Filter out anything with less than npxmin pixels
+        msk = npx >= npxmin
+        #  centroid in angle (sum ints*a / sum(ints)
+        print "After removing znigers",npks
+        centroids = np.compress( msk, ang_pks[:,s_I]/sig_pks[:,s_I])
+        #  area or height ?
+        areas = np.compress( msk, sig_pks[:,s_I] )
+        heights = np.compress( msk, sig_pks[:,mx_I] )
+        # width 
+        low = np.compress( msk, sig_pks[:,bb_mn_f]).astype(int)
+        high = np.compress( msk, sig_pks[:,bb_mx_f]).astype(int)
+        widths = ang[high] - ang[low]
+        # sigma
+        # sum( x*x*I )
+        xxI = np.compress( msk, ang2_pks[:,s_I])
+        vari = xxI / areas - centroids*centroids
+        stof = 8*np.log(2)
+        sigma = np.sqrt( abs( vari )*stof )
+        if plot:
+            pylab.plot(self.angle,self.corr,",")
+            pylab.plot(centroids, heights,"+")
+            pylab.plot(centroids-widths/2, heights*0.3,"|")   
+            pylab.plot(centroids+widths/2, heights*0.3,"|")   
+            pylab.plot(centroids-sigma/2, heights*0.5,"|")   
+            pylab.plot(centroids+sigma/2, heights*0.5,"|")   
+            pylab.show()
+        self.pars.centroids = list(centroids)
+        self.pars.areas = list(areas)
+        self.pars.widths = list(widths)
+        self.pars.heights = list(heights)
+        self.pars.save( filename )    
+        return centroids, areas, widths, heights
 @}
 
 
@@ -1129,7 +1442,7 @@ if __name__=="__main__":
         fname = sys.argv[1]
         pars = WWMpar()
         pars.load(sys.argv[2])
-	outfile = sys.argv[3]
+        outfile = sys.argv[3]
         scans = [int(v) for v in sys.argv[4:]]
     except:
         print "Usage: %s specfile jsonparfile scans"
@@ -1171,7 +1484,9 @@ def matchpeaks(x1, x2, tol=0.1):
 
 
 
-\section{User interface}
+
+
+\section{User interface }
 
 This needs to be fixed. Life is short.
 For now we will just hack something together using matplotlib 
@@ -1439,41 +1754,41 @@ WWM_MOTOR_N = motor_num(WWM_MOTOR)
 WWM_PAR["enc_steps_per_degree"] = motor_par(WWM_MOTOR_N,"step_size")
 
 def wwm_set_filt(n) '{
-	# Sets the filter timescale on the musst card
-	# it is 2**n times the sampling (40 kHz apparently)
-	# ...or could be 4 kHz, depening on the daughter card
-	local two_n
-	if ( n == 0 ){
-		musst_comm("CHCFG CH5 ADC +-10V")
-		musst_comm("CHCFG CH6 ADC +-10V")
-	}
-	musst_comm(sprintf("CHCFG CH5 ADC +-10V FILT %d",n))
-	musst_comm(sprintf("CHCFG CH6 ADC +-10V FILT %d",n))
-	p musst_comm("?CHCFG CH5")
-	p musst_comm("?CHCFG CH6")
-	two_n = pow(2,n)
-	printf("Sampling period is 40kHz / 2^%d: %.2f Hz, %f ms",\
-		n, 4.0e4/two_n, two_n/40.0)
+        # Sets the filter timescale on the musst card
+        # it is 2**n times the sampling (40 kHz apparently)
+        # ...or could be 4 kHz, depening on the daughter card
+        local two_n
+        if ( n == 0 ){
+                musst_comm("CHCFG CH5 ADC +-10V")
+                musst_comm("CHCFG CH6 ADC +-10V")
+        }
+        musst_comm(sprintf("CHCFG CH5 ADC +-10V FILT %d",n))
+        musst_comm(sprintf("CHCFG CH6 ADC +-10V FILT %d",n))
+        p musst_comm("?CHCFG CH5")
+        p musst_comm("?CHCFG CH6")
+        two_n = pow(2,n)
+        printf("Sampling period is 40kHz / 2^%d: %.2f Hz, %f ms",\
+                n, 4.0e4/two_n, two_n/40.0)
 }'
 
 def wwm_save '{
 
 # Saves the last collected musst scan data into the specfile
 
-	global WWM_PAR
+        global WWM_PAR
 
         local npts  i j isgname npoints nval  n 
         local long array mydata[131073][4] 
-	local float array ang[131073]
-	local float array signal[131073]
+        local float array ang[131073]
+        local float array signal[131073]
 
-	nval = 4
+        nval = 4
 
         isgname = MUSST_AUX["default"]
 
- 	npoints = musst_comm("?VAR NPOINTS")
+         npoints = musst_comm("?VAR NPOINTS")
 
-	# FIXME: binary transfer? Save as edf?
+        # FIXME: binary transfer? Save as edf?
         n = musst_getdata(isgname, npoints, nval, mydata)
 
         # This is from _head in ascan
@@ -1483,10 +1798,10 @@ def wwm_save '{
                 ond; offt
 
                HEADING = sprintf("wwscan %g %g %d %g",\
-			 WWM_PAR["start"],\
-			 WWM_PAR["end"],\
-			 WWM_PAR["nstep"],\
-			 WWM_PAR["ctime"])
+                         WWM_PAR["start"],\
+                         WWM_PAR["end"],\
+                         WWM_PAR["nstep"],\
+                         WWM_PAR["ctime"])
 
                 printf("\n#S %d  %s\n#D %s\n",++SCAN_N,HEADING,DATE)
 
