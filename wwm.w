@@ -817,7 +817,7 @@ We recycle the WWMpar code via inheritance to make a crystal object:
 @{
 class WWMcrystal( WWMpar ):
     a = 5.43094 # silicon, value to be debated.
-
+    dmin = None
     def set_wvln(self, wvln):
         self.wvln = wvln
         self.bmatrix = [ [ wvln/self.a, 0, 0],
@@ -830,7 +830,10 @@ class WWMcrystal( WWMpar ):
         a is the cubic unit cell parameter
         """
         uc = unitcell.unitcell( [ self.a,self.a,self.a,90,90,90],"F" )
-        uc.gethkls_xfab( 2.0/self.wvln, "Fd-3m" ) 
+        if self.dmin is None:
+            uc.gethkls_xfab( 2.0/self.wvln, "Fd-3m" ) 
+        else:
+            uc.gethkls_xfab( 1.0/self.dmin, "Fd-3m" ) 
         self.hkls = np.array([p[1] for p in uc.peaks])
         return self.hkls
 
@@ -1101,7 +1104,7 @@ variables.
         # num = - (self.modg2 - 2*self.axistilt*self.kz)
         dnumdv = - ( dmodg2dv ) * FIXMEHERE
         # den = 2*np.sqrt( 1 - self.axistilt*self.axistilt )
-
+        raise "not implemented yet"
         
 
 
@@ -1482,7 +1485,106 @@ def matchpeaks(x1, x2, tol=0.1):
     return matches
 @}
 
+@O WWMpeakassign.py
+@{
+@<imports@>
+@<utilities@>
+@<WWMpar@>
+@<WWMcrystal@>
+@<WWMdiffractometer@>
 
+from ImageD11.simplex import Simplex
+
+class simplexfitter(object):
+    def __init__(self,energy,ubifile,peaksfile):
+        c = WWMcrystal()
+        c.set_wvln(12.3985/energy)
+        c.dmin = c.a/np.sqrt(3)*0.9
+        rx, ry, rz = [ np.radians(45.35), 0.01 , 0.01 ]
+        u0= np.dot( np.dot(  rotmatx(rx),rotmaty(ry)),rotmatz(rz))
+        self.start = [rx, ry, rz]
+        c.set_orientation(u0)
+        d = WWMdiffractometer(c,0)
+        d.crystal.generate_hkls()
+        d.crystal.generate_gve(  )
+        d.computek()
+        d.computeomegas()
+
+        p = WWMpar(peaksfile)
+        # Take the strongest 16 peaks in p (hoping for 111 family)
+        intensity_order = np.argsort( p.heights )[::-1]
+        obspeaks = angmod(np.take( np.radians(p.centroids), intensity_order[:8] ))
+        obspeaks = np.sort( obspeaks )
+        # Take the lowest d-spacing peaks in d == first 8
+        ocalc1 = angmod(d.omega1[:8]) 
+        ocalc2 = angmod(d.omega2[:8])
+        kz    = d.kz[:8] 
+        # We saw that the 8 strongest observed peaks are also the 8 111 reflections
+        # with a small kz component.
+        inds = np.argsort(abs(kz))[:4]
+        ocalc = np.concatenate( ( np.take( ocalc1, inds ), np.take(ocalc2, inds) ) )
+        onetwo = [1,]*4 + [2,]*4
+        order = np.argsort( ocalc )
+        onetwo = np.take( onetwo, order )
+        inds = list(inds)*2
+        inds = np.take( inds, order)
+        ocalc = np.take( ocalc, order )
+        pylab.plot( ocalc, "o")
+        pylab.plot( obspeaks, "o")
+        pylab.plot( abs(kz)/abs(kz).max(), "+")
+        pylab.show()
+        # we now retain the same ordering of the top 8 peaks
+        print zip(inds, onetwo)
+        self.d = d
+        self.inds = inds
+        self.onetwo = onetwo
+        self.obspeaks = obspeaks
+
+    def gof(self, args, debug = False):
+        rx, ry, rz = args
+        u0= np.dot( np.dot(  rotmatx(rx),rotmaty(ry)),rotmatz(rz))
+        if debug:
+            print "orientation",rx,ry,rz
+            print u0        
+        self.d.crystal.set_orientation( u0 )
+        self.d.crystal.generate_gve(  )
+        self.d.computek()
+        self.d.computeomegas()
+        sum2 = 0.0
+        for i,j,k in zip(self.inds, self.onetwo, range(len(self.inds))):
+            if j == 1:
+                calc = self.d.omega1[i]
+                diff = self.obspeaks[k] - calc
+                sum2 += diff*diff    
+            elif j==2:
+                calc = self.d.omega2[i]
+                diff = self.obspeaks[k] - calc
+                sum2 += diff*diff    
+            else:
+                print "onetwo not in 1,2"
+            if debug:
+                print i,j,k, calc,self.obspeaks[k],diff,sum2
+        return sum2
+
+    def fitrot(self):
+        guess = self.start
+        inc   = [np.radians(0.5),]*3
+        print "Before",self.gof(guess, debug=True)
+        s = Simplex( self.gof, guess, inc )
+        fitted, error, n = s.minimize()    
+        print
+        self.gof( fitted ,debug=True )
+        print np.degrees(fitted)
+    
+    
+if __name__=="__main__":
+    import sys
+    energy = float(sys.argv[1])
+    ubifile = sys.argv[2]
+    peaksfile = sys.argv[3]
+    s = simplexfitter(energy, ubifile, peaksfile )
+    s.fitrot( )
+@}
 
 
 
