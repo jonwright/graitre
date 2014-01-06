@@ -504,7 +504,7 @@ import math, json, pprint, time
 import numpy as np, pylab
 
 # Fable code from Jon
-from ImageD11 import unitcell, gv_general, transform
+from ImageD11 import unitcell, gv_general, transform, grain
 from ImageD11.connectedpixels import blobproperties, connectedpixels,\
       blob_moments, s_1, s_I, mx_I, bb_mn_f, bb_mx_f
 @}
@@ -1089,7 +1089,6 @@ From the Milch and Minor magic:
 @{
     def computek(self):
         """ This is from Milch and Minor 1974 """
-        self.crystal.calcall()
         g = self.crystal.gve
         h = self.crystal.hkls
         # Make two copies
@@ -1109,6 +1108,7 @@ From the Milch and Minor magic:
         # Allow sqrt negative as nan for now
         # self.fri is the sign to take on the Friedel pair
         self.ky = np.sqrt( arg ) * self.fri
+        self.icalc = np.concatenate( (self.crystal.icalc, self.crystal.icalc ) )
 @}
 
 
@@ -1146,26 +1146,40 @@ and the scattering vector as $k = k_{out} - k_{in}$
         """
         a0 = self.pars.zeroAngle # degrees
         # along the beam, sin zero is zero
-        n = np.array( (np.sin( np.degrees(self.omega)) ,
-                      np.cos( np.degrees(self.omega)) ,
-                      np.zeros( len(self.omega))  )     )
+        n = np.array( (np.sin( self.omega) ,
+                       np.cos( self.omega) ,
+                       np.zeros( len(self.omega))  )     )
+        print "nshape",n.shape
+        # Path on input direction is roughly nx (beam on 1,0,0)
+        # cosine of angle between normal and (1,0,0)
+        pin = 1.0/n[0,:]
         # zn is zero, we assume it is roughly on axis here (not quite true)
         # FIXME - intensity refinement will need the fit the normal direction
         #
         # Output direction
-        ko = np.array((self.kx - 1 , self.ky, self.kz))
+        ko = np.array((self.kx + 1 , self.ky, self.kz)) 
+        normedko = ko / np.sqrt((ko*ko).sum(axis=0))
+        print "koshape",ko.shape
         #
-        # Path on output direction
-        po = np.dot( n, ko )
-        #
-        # Path on input direction is roughly nx (beam on 1,0,0)
+        # cosine with output direction
+        cospko = (normedko*n).sum(axis=0) 
+        po = 1.0/cospko
+        print "poshape",po.shape
         #
         # Both of these are signed quantities. 
         # Same sign == Bragg
         # opposite sign == Laue
         #
+        print "pinshape",pin.shape
+        for i in range(10):
+            print self.omega[i], pin[i], po[i],
+            print self.kx[i],self.ky[i],self.kz[i]
+        #
+
         # plr == path length ratio
-        self.plr = np.dot(ko, n )/ np.dot( ko, ko ) / po
+        self.plr = np.arctan2(pin, po)
+        print self.plr.shape
+        return self.plr
 @}
 
         
@@ -1174,7 +1188,7 @@ And a quick testcase for the diffractometer stuff:
 @d testdiff1
 @{
 def testdiff1():
-    d = WWMdiffractometer( maketestcrystal() )
+    d = WWMdiffractometer( maketestcrystal(), testpars )
     d.calcall()
     # print d.h.shape
     for i in range(50):
@@ -1197,6 +1211,8 @@ def testdiff1():
 @<WWMdiffractometer@>
 @<testdiff1@>
 if __name__=="__main__":
+   import sys
+   testpars=sys.argv[1]
    testdiff1()
 @}
 
@@ -1610,9 +1626,11 @@ def matchpeaks(x1, x2, tol=0.1):
 @{
 @<imports@>
 @<utilities@>
+@<WWM@>
 @<WWMpar@>
 @<WWMcrystal@>
 @<WWMdiffractometer@>
+
 
 from ImageD11.simplex import Simplex
 
@@ -1620,82 +1638,109 @@ class simplexfitter(object):
     def __init__(self,energy,ubifile,peaksfile):
         c = WWMcrystal()
         c.set_wvln(12.3985/energy)
-        c.dmin = c.a/np.sqrt(3)*0.9
-        rx, ry, rz = [ np.radians(45.35), 0.01 , 0.01 ]
-        u0= np.dot( np.dot(  rotmatx(rx),rotmaty(ry)),rotmatz(rz))
+        # c.dmin = c.a/np.sqrt(3)*0.9
+        gr = grain.read_grain_file( ubifile )[0]
+        u0 = gr.u
+        rx, ry, rz = getrxryrz( u0 )
+        self.start = [rx,ry,rz]
+        utest= np.dot( np.dot(  rotmatx(rx),rotmaty(ry)),rotmatz(rz))
+        if not abs(utest -u0).sum() < 1e-10:
+           print u0, utest
+           raise
         self.start = [rx, ry, rz]
         c.set_orientation(u0)
-        d = WWMdiffractometer(c,0)
-        d.crystal.generate_hkls()
-        d.crystal.generate_gve(  )
-        d.computek()
-        d.computeomegas()
+        c.generate_hkls()
+        c.filter_hkls( 0.01 )
+        c.generate_gve(  )
+        d = WWMdiffractometer(c, peaksfile)
 
+        d.computek()
+        print len(d.icalc)
+        d.computeomegas()
         p = WWMpar(peaksfile)
-        # Take the strongest 16 peaks in p (hoping for 111 family)
-        intensity_order = np.argsort( p.heights )[::-1]
-        obspeaks = angmod(np.take( np.radians(p.centroids), intensity_order[:8] ))
-        obspeaks = np.sort( obspeaks )
-        # Take the lowest d-spacing peaks in d == first 8
-        ocalc1 = angmod(d.omega1[:8]) 
-        ocalc2 = angmod(d.omega2[:8])
-        kz    = d.kz[:8] 
-        # We saw that the 8 strongest observed peaks are also the 8 111 reflections
-        # with a small kz component.
-        inds = np.argsort(abs(kz))[:4]
-        ocalc = np.concatenate( ( np.take( ocalc1, inds ), np.take(ocalc2, inds) ) )
-        onetwo = [1,]*4 + [2,]*4
-        order = np.argsort( ocalc )
-        onetwo = np.take( onetwo, order )
-        inds = list(inds)*2
-        inds = np.take( inds, order)
-        ocalc = np.take( ocalc, order )
-        pylab.plot( ocalc, "o")
-        pylab.plot( obspeaks, "o")
-        pylab.plot( abs(kz)/abs(kz).max(), "+")
-        pylab.show()
-        # we now retain the same ordering of the top 8 peaks
-        print zip(inds, onetwo)
+        p.heights = np.array(p.heights)
+        obs = np.array(p.centroids)+p.zeroAngle
+        self.obspeaks=obs
+        # for each calc peak find the closest obs peak
+        pairs = []
+        oc = np.degrees(d.omega)
+        for obs_j in range(len(obs)):
+            diffs = abs( obs[obs_j] - oc  )
+            inds = np.argsort( diffs )
+            i = inds[0]
+            #print diffs[i]
+            #1/0
+            #     print oc, obs_j, diffs[obs_j]
+            if diffs[i] < 0.15 and diffs[inds[1]]>2*diffs[inds[0]]:
+               #print "got"
+               pairs.append((i,obs_j))
+        print len(pairs)
+        oms =  np.array( [ (np.degrees(d.omega[i]), obs[j])        for i,j in pairs ])
+        print oms.shape
+        ints = np.array( [ (d.icalc[i], p.heights[j])        for i,j in pairs])
+        pathlenrat = np.take( d.pathlengths(), [i for i,j in pairs])
+        if 0:
+            pylab.figure()
+            pylab.plot( oms[:,0], oms[:,0]-oms[:,1],"o")
+            pylab.figure()
+            pylab.plot( oms[:,0], ints[:,0]/ints[:,1],"o")
+            pylab.figure()
+            pylab.plot( pathlenrat, ints[:,0]/ints[:,1],"o")
+            pylab.figure()
+
+        dataset = WWMdataset( "crystal_ori.spc", p )
+        dataset.peaksearch([7,8,9,10,11,12], "crystal_ori.spc.json")
+        dom = np.degrees(d.omega)
+        if 0:
+            pylab.figure()
+            pylab.plot( dataset.angle + p.zeroAngle , dataset.corr, "-")
+            pylab.plot( dom, d.icalc/20000, "o")
+            pylab.plot( dom, -d.icalc*d.plr/20000, "o")
+            pylab.plot( dom, -d.icalc/d.plr/20000, "o")
+            pylab.plot( obs, p.heights,"+")
+            for i,j in pairs:
+                pylab.plot( [obs[j],dom[i] ],[p.heights[j],d.icalc[i]/20000],"k-")
+            pylab.show()
         self.d = d
-        self.inds = inds
-        self.onetwo = onetwo
-        self.obspeaks = obspeaks
+        self.p = p
+        out=open("pairs.dat","w")
+        for i,j in pairs:
+            out.write("%d %d %d %f %f %f %f %f\n"%(
+            d.h[i,0],d.h[i,1],d.h[i,2],dom[i],d.icalc[i],obs[j],p.heights[j],d.plr[j]))
+        out.close()
+        self.p=p
+        self.pairs=pairs
 
     def gof(self, args, debug = False):
-        rx, ry, rz = args
-        u0= np.dot( np.dot(  rotmatx(rx),rotmaty(ry)),rotmatz(rz))
+        rx, ry, rz, w, axis = args
+        u0 = np.dot( np.dot(  rotmatx(rx),rotmaty(ry)),rotmatz(rz))
         if debug:
-            print "orientation",rx,ry,rz
-            print u0        
+            print "orientation",rx,ry,rz,w,axis
+            print u0 
+        self.d.crystal.set_wvln( w )       
+        self.d.axistilt = axis
         self.d.crystal.set_orientation( u0 )
         self.d.crystal.generate_gve(  )
         self.d.computek()
         self.d.computeomegas()
-        sum2 = 0.0
-        for i,j,k in zip(self.inds, self.onetwo, range(len(self.inds))):
-            if j == 1:
-                calc = self.d.omega1[i]
-                diff = self.obspeaks[k] - calc
-                sum2 += diff*diff    
-            elif j==2:
-                calc = self.d.omega2[i]
-                diff = self.obspeaks[k] - calc
-                sum2 += diff*diff    
-            else:
-                print "onetwo not in 1,2"
-            if debug:
-                print i,j,k, calc,self.obspeaks[k],diff,sum2
-        return sum2
+        dom = np.degrees( self.d.omega )
+        diff = np.array([dom[i] - self.obspeaks[j] for i,j in self.pairs])
+        sum2 = (diff*diff).sum()
+        if debug:
+#           pylab.plot([dom[i] for i,j in self.pairs], diff,"o")
+           pylab.hist(diff,bins=64)
+        return np.sqrt(sum2)*100
 
     def fitrot(self):
-        guess = self.start
-        inc   = [np.radians(0.5),]*3
+        guess = self.start + [ self.d.crystal.wvln, 0.0]
+        inc   = [np.radians(0.1),]*3 + [0.001, 0.01]
+        pylab.figure()
         print "Before",self.gof(guess, debug=True)
         s = Simplex( self.gof, guess, inc )
         fitted, error, n = s.minimize()    
-        print
-        self.gof( fitted ,debug=True )
-        print np.degrees(fitted)
+        print self.gof( fitted ,debug=True )
+        pylab.show()
+        print np.degrees(fitted[:3]),fitted[3]
     
     
 if __name__=="__main__":
@@ -1785,15 +1830,15 @@ scans = [int(i) for i in sys.argv[3:]]
 print scans
 
 print "Usage: specfile dummypars darknum floodnum scan0 scan1 ..."
-print "for example: WWM_process.py wwm_42kev_23092013.spc wwmfrz.json  0 1 2 3 4
-5 6 7 8 9 10"
+print "for example: WWM_process.py wwm_42kev_23092013.spc wwmfrz.json  0 1 2 3 4"
+
 
 def ex(s):
     print s
     os.system(s)
 
 # copy z:\crystallography\jon\sept13\wwm_edges\wwm_42kev_23092013.spc .
-shutil.copyfile("wwmfrz.json",parfile)
+shutil.copyfile("wwmhrz.json",parfile)
 ex("python WWMcalib.py %s %s %d %d"%(
     specfile, parfile, scans[0], scans[1]))
 s = "python WWMmut.py %s %s %d %d %d"%(
