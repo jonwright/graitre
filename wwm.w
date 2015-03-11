@@ -817,7 +817,7 @@ We recycle the WWMpar code via inheritance to make a crystal object:
 @{
 class WWMcrystal( WWMpar ):
     a = 5.43094 # silicon, value to be debated.
-    dmin = None
+    dmin = 0.3
     def set_wvln(self, wvln):
         self.wvln = wvln
         self.bmatrix = [ [ wvln/self.a, 0, 0],
@@ -836,7 +836,10 @@ class WWMcrystal( WWMpar ):
             uc.gethkls_xfab( 1.0/self.dmin, "Fd-3m" ) 
         self.hkls = np.array([p[1] for p in uc.peaks])
         self.readfhkl( self.fhklfile )
-        self.icalc = np.array( [self.getfhkl(*h) for h in self.hkls] )
+        print self.hkls.shape
+        ds = 1/np.sqrt((self.hkls*self.hkls).sum(axis=1))
+        # d^2 F
+        self.icalc = np.array( [d*self.getfhkl(*h) for d,h in zip(ds,self.hkls)] )
         return self.hkls
 
     def set_orientation( self, umatrix):
@@ -962,11 +965,11 @@ on the ICSD web server to get values.
                 hkl = [int(v) for v in items[:3]]
             except:
                 continue
-            intensity = float(items[13])**2 # A**2 ok for silicon only
-            self.fhkl[tuple(hkl)] = intensity
+            val = float(items[13]) # A**2 ok for silicon only. REGRET
+            self.fhkl[tuple(hkl)] = val
 
     def getfhkl(self,h,k,l):
-        """ returns I(hkl) = F(hkl)*F'(hkl) given hkl """
+        """ returns F(hkl) given hkl """
         pos = [abs(h),abs(k),abs(l)]
         pos.sort(reverse=True)
         pos = tuple(pos)
@@ -1108,6 +1111,7 @@ From the Milch and Minor magic:
         # Allow sqrt negative as nan for now
         # self.fri is the sign to take on the Friedel pair
         self.ky = np.sqrt( arg ) * self.fri
+        self.eta = np.arctan2( self.kz , np.sqrt(self.modg2 - self.kz*self.kz))
         self.icalc = np.concatenate( (self.crystal.icalc, self.crystal.icalc ) )
 @}
 
@@ -1589,6 +1593,11 @@ if __name__=="__main__":
         raise
     dataset = WWMdataset( fname, pars )
     dataset.peaksearch(scans, outfile)
+    xy  = zip(  dataset.angle, dataset.corr )
+    f = open("www_plot.dat","w")
+    for x,y in xy: 
+        f.write( "%f %f\n"%(x,y))
+    f.close()
 @}
 
 
@@ -1657,7 +1666,25 @@ class simplexfitter(object):
         d.computek()
         print len(d.icalc)
         d.computeomegas()
+        print d.eta
+        ics = d.icalc * abs(np.sin(d.eta))
+        ics = ics / np.nanmax(ics)
+        print ics
+        icc = d.icalc * abs(np.cos(d.eta))
+        icc = icc/ np.nanmax(icc)
+        print icc
+        ic = d.icalc.copy()
+        ic = ic/ np.nanmax(ic)
+        print icc
+        dom = np.degrees(d.omega)
+        xy =  np.loadtxt("www_plot.dat")
         p = WWMpar(peaksfile)
+        pylab.plot(xy[:,0]+p.zeroAngle,xy[:,1]/xy[:,1].max(),"-")
+        pylab.plot( dom,  ic, "o")
+        pylab.plot( dom,  icc, "o")
+        pylab.plot( dom,  ics, "o")
+#        pylab.show()
+
         p.heights = np.array(p.heights)
         obs = np.array(p.centroids)+p.zeroAngle
         self.obspeaks=obs
@@ -1688,25 +1715,21 @@ class simplexfitter(object):
             pylab.plot( pathlenrat, ints[:,0]/ints[:,1],"o")
             pylab.figure()
 
-        dataset = WWMdataset( "crystal_ori.spc", p )
-        dataset.peaksearch([7,8,9,10,11,12], "crystal_ori.spc.json")
-        dom = np.degrees(d.omega)
-        if 0:
-            pylab.figure()
-            pylab.plot( dataset.angle + p.zeroAngle , dataset.corr, "-")
-            pylab.plot( dom, d.icalc/20000, "o")
-            pylab.plot( dom, -d.icalc*d.plr/20000, "o")
-            pylab.plot( dom, -d.icalc/d.plr/20000, "o")
+        if 1:
+            pylab.figure(2)
+            pylab.plot( xy[:,0] + p.zeroAngle , xy[:,1], "-")
+            icn = d.icalc/d.icalc.max()
+            pylab.plot( dom, icn, "o")
             pylab.plot( obs, p.heights,"+")
             for i,j in pairs:
-                pylab.plot( [obs[j],dom[i] ],[p.heights[j],d.icalc[i]/20000],"k-")
+                pylab.plot( [obs[j],dom[i] ],[p.heights[j], icn[i]],"k-")
             pylab.show()
         self.d = d
         self.p = p
         out=open("pairs.dat","w")
-        for i,j in pairs:
-            out.write("%d %d %d %f %f %f %f %f\n"%(
-            d.h[i,0],d.h[i,1],d.h[i,2],dom[i],d.icalc[i],obs[j],p.heights[j],d.plr[j]))
+#        for i,j in pairs:
+#            out.write("%d %d %d %f %f %f %f %f\n"%(
+#            d.h[i,0],d.h[i,1],d.h[i,2],dom[i],d.icalc[i],obs[j],p.heights[j],d.plr[j]))
         out.close()
         self.p=p
         self.pairs=pairs
@@ -1727,8 +1750,11 @@ class simplexfitter(object):
         diff = np.array([dom[i] - self.obspeaks[j] for i,j in self.pairs])
         sum2 = (diff*diff).sum()
         if debug:
-#           pylab.plot([dom[i] for i,j in self.pairs], diff,"o")
+           pylab.figure(1)
+           pylab.plot([dom[i] for i,j in self.pairs], diff,"o")
+           pylab.figure(2)
            pylab.hist(diff,bins=64)
+           pylab.show()
         return np.sqrt(sum2)*100
 
     def fitrot(self):
@@ -1740,7 +1766,9 @@ class simplexfitter(object):
         fitted, error, n = s.minimize()    
         print self.gof( fitted ,debug=True )
         pylab.show()
-        print np.degrees(fitted[:3]),fitted[3]
+        print np.degrees(fitted[:3]),fitted[3:]
+        print 12.3985/fitted[3]
+        
     
     
 if __name__=="__main__":
