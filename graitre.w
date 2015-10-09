@@ -95,7 +95,7 @@ the data to the grains.
     \end{pmatrix}  
 \end{math}
 
-You will notice there has been and interchange of row and column
+You will notice there has been an interchange of row and column
 vectors at this point.
 In the ImageD11 code for indexing unknown cells this interchange
 caused a great deal of confusion.
@@ -116,7 +116,7 @@ or, these are indeed rows as above, after the transpose:
 \[ \begin{pmatrix} g_0 \\ g_1 \\ g_2 \end{pmatrix}=  
      \left[ \mathbf{a_0 a_1 a_2} \right]^{-1} \]   
 
-or:
+or (TODO: this is confusing, add an example):
 
 \[ \mathbf{ G }^T =   \mathbf{ A }^{-1} \]
 \[ \left(\mathbf{ G }^T\right)^{-1} =   \left(\mathbf{ A }^{-1}\right)^{-1} \]
@@ -137,15 +137,17 @@ This was quite a difficult problem in ImageD11.
 With hindsight it was a mistake not to have read the literature in 
 more detail.
 Seems the first nice derivation was due to Milch and Minor (1974). 
-This is paraphrased later by D.J. Thomas, who covers the quite
+This is paraphrased later by D.J. Thomas, who covers the more
 general case at the cost of introducing some unfamiliar notation.
 
-We reproduce the story. The condition for diffraction is:
+We reproduce the story from Milch and Minor. The condition for diffraction is:
 
 \[ \mathbf{| k_0 + R | = |k_0| } \]
 
+That equation says the length of the incident scattering vector is
+equal to the scattered vector, e.g., diffraction is elastic.
 Here $\mathbf{k_0}$ is the incident wave-vector and $\mathbf{R}$ is the 
-crystal lattice vector. 
+crystal lattice vector. Squaring both sides:
 \[ \mathbf{| k_0 + R |^2 = |k_0|^2 } \]
 \[ \mathbf{ k_0^2 + 2k_0R + R^2 - k_0^2} = 0  \]
 \[ \mathbf{  R^2 + 2k_0R} = 0 \]
@@ -286,7 +288,7 @@ Then the rotation can be re-written as:
 \[ \Psi = \Psi_{parallel} + \Psi_{plane}\cos\psi + \Psi_{perp}\sin\psi \]
 
 \begin{figure}
-\includegraphics[width=8cm]{decompose}
+\includegraphics[width=8cm]{decompose.png}
 \caption{Reproduced from Thomas (1990, Goniometry)}
 \end{figure}
 For a rotation axis which has normalised direction $(l,m,n)$ these 
