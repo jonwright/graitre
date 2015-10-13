@@ -339,6 +339,7 @@ and $s$ for ``sin'' component. Thus,
 If we return to our problem of solving that equation we now find 
 that everything is in terms matrices where we know all of the element
 values and the only unknown is $\psi$. 
+FIXME: what is k?
 This solves the question of a general rotation axis. Amazing.
 The derivative with respect to angle is also easier to find.
 
@@ -546,6 +547,162 @@ Build a stack of rotations to represent diffractometer.
 Apply rotations to incident beam and UB to reduce to single
 axis form.
 
+\section{ Coding in python }
+
+Try to write an initial version in python because
+we are most fluent in this language at the moment
+and it should be the easiest to debug (interactive 
+prompt).
+
+So, what is the overall computation? 
+We want to compute the (sc, fc, angle) for a series
+of indexed diffraction spots in terms of a model.
+That is detector position and scan rotation angle.
+
+We will start with just the angle part. 
+The model of the diffractometer is a series of rotation
+axes stacked on top of each other. 
+Represent this as a list of axis directions.
+One axis is noted as the moving axis.
+We also input the wavelength, UB matrix and hkl indices:
+
+@o compute_omega.py @{
+
+"""
+Module to implement the maths for the grain translation refinement
+"""
+
+import numpy as np
+import math
+
+def rodrigues_formula( vector, axis, angle):
+    """
+    vector = [3,] thing to be rotated
+    axis   = normalised vector along axis
+    angle  = angle to rotate by (degrees)
+
+    Implements the Rodrigues Rotation Formula from
+    wikipedia: https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula
+    v_rot = v cos(theta) + (k x v) sin(theta) + k(k.v)(1 - cos(theta))
+    """
+    cost = math.cos(math.radians(angle))
+    sint = math.sin(math.radians(angle))
+    nhat = np.asarray(axis) / math.sqrt( np.dot(axis, axis) )
+    kxv = np.cross(nhat, vector)
+    kkdv = nhat * np.dot(nhat, vector)
+    vrot = cost*np.asarray(vector) + kxv*sint + kkdv*(1-cost)
+    return vrot
+    
+def rotation_matrix( axis, angle ):
+    """
+    Convert axis angle to rotation matrix
+    """
+    return np.array( [rodrigues_formula(v, axis, angle) for v in np.eye(3)] )
+
+def get_angle( scanaxis, axes, axpos, incident_beam, gvec ):
+    """
+    axis = integer pointer into list of axis
+    axes = vectors along axis directions
+    a1   = positions of non-scanning axes
+    s0   = incident beam wave vector
+    g0   = reciprocal lattice vector at a0
+    """
+    assert scanaxis > 0 and scanaxis < len(axes) # in range
+    matrices = [ rotation_matrix( axis, angle ) for (axis, angle) in
+    	     zip( axes, axpos ) ]
+    # Rotate the incident beam according to the first axes
+    # as the list starts at the floor i increments
+    rot_inbeam = incident_beam
+    for i in range(0, scanaxis):
+        rot_inbeam = np.dot(matrices[i], rot_inbeam)
+    # Rotate crystal lattice vector to scan axis co-ords
+    # as the list ends at the crystal i decrements
+    rot_gvec = gvec
+    for i in range(len(axes), scanaxis ):
+        assert i != scanaxis
+        rot_gvec = np.dot( matrices[i], rot_gvec)
+    # We are ready to solve a single axis angle problem now
+    angle = axis_solve( axes[scanaxis], rot_inbeam, rot_gvec )
+
+
+def axis_solve( axis, s0vec, g0vec ):
+    """
+    axis = rotation axis
+    s0vec = incident beam direction
+    g0vec = crystal lattice at angle = 0 
+    """
+    return np.dot( np.dot(axis, s0vec), g0vec)
+    
+if __name__ == "__main__":
+    print  rodrigues_formula( (0, 0, 1), 
+    	   		     (0, 1, 0), 
+                             30)
+    print  rotation_matrix( (0, 1, 0), 30)
+
+
+@}
+
+
+\subsubsection{ Testing the code }
+
+We try to set up a series of test cases to verify whether
+out computations are correct and meaningful.
+
+
+@o test_compute_omega.py 
+@{
+
+"""
+Test cases for the compute_omega module
+"""
+
+import unittest, numpy.testing as npt
+import compute_omega as co
+
+# DELTA is the smallest value which can be added to
+# one without upsetting it. e.g. the precision of a
+# double precision number
+DELTA = 1.
+while (1. + DELTA) != 1.: 
+    DELTA /= 2
+
+
+class TestComputeOmega(unittest.TestCase):
+    """
+    Test case class
+    """      
+    def test_rodrigues_formula(self):
+    	""" 
+	Testing rotation of vectors about vectors:
+      	rodrigues_formula(vector, axis, angle)
+	"""
+	xvec = (1, 0, 0) 
+	yvec = (0, 1, 0) 
+	zvec = (0, 0, 1) 
+	# X -> Y on +90 around Z
+	vcalc = co.rodrigues_formula(xvec, zvec, 90)
+	npt.assert_allclose( vcalc , yvec , atol = DELTA*2 )
+	# Z -> X on +90 around Y
+	vcalc = co.rodrigues_formula(zvec, yvec, 90)
+	npt.assert_allclose( vcalc , xvec , atol = DELTA*2 )
+	# Y -> Z at +90 around X
+	vcalc = co.rodrigues_formula(yvec, xvec, 90)
+	npt.assert_allclose( vcalc , zvec , atol = DELTA*2 )
+	# Y -> -Y at +180 around X
+	vcalc = co.rodrigues_formula(yvec, xvec, 180)
+	npt.assert_allclose( -vcalc , yvec , atol = DELTA*2 )
+	# Y -> -Z at +270 around X
+	vcalc = co.rodrigues_formula(yvec, xvec, 270)
+	npt.assert_allclose( -vcalc , zvec , atol = DELTA*2 )
+	
+
+
+
+if __name__ == '__main__':
+    unittest.main()	  
+
+@}
+
 
 \section{Examples}
 
@@ -560,6 +717,27 @@ pdflatex graitre
 bibtex graitre
 pdflatex graitre
 pdflatex graitre
+@}
+
+@o makefile -t
+@{
+ 
+all: graitre.pdf pylint.out test.out
+
+graitre.pdf: graitre.w
+	nuweb graitre
+	pdflatex graitre
+
+
+pylint.out: graitre.w
+	nuweb graitre
+	pylint compute_omega.py | tee pylint.out
+	pylint test_compute_omega.py | tee -a pylint.out
+
+test.out: graitre.w
+	nuweb graitre
+	python test_compute_omega.py | tee tests.out
+
 @}
 
 
