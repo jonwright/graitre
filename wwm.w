@@ -262,12 +262,12 @@ $\theta$:
 \[g_{x} = g_{xy}\cos{\theta}; g_y = g_{xy}\sin{\theta} \]
 \[ k_x = g_{xy}\cos{\theta}\cos{\phi} - g_{xy}\sin{\theta}\sin{\phi} \]
 \[ k_x = g_{xy}\cos{( \theta+\phi ) } \]
-\[ \cos{(\theta+\phi)} = -\mathbf{ \frac{|g|^2 - 2 s_{0z}g_z }
-     { 2  \sqrt{g_x^2+g_y^2} \sqrt{1-s_{0z}^2 }}} \]
+\[ \cos{(\theta+\phi)} = \mathbf{ \frac{-|g|^2 - 2 s_{0z}g_z }
+        { 2  \sqrt{g_x^2+g_y^2} \sqrt{1-s_{0z}^2 }}} \]
 
 Finally:
 
-\[ \phi = \arccos{ \left[ -\frac{|g|^2 - 2 s_{0z}.g_z }
+\[ \phi = \arccos{ \left[ \frac{-|g|^2 - 2 s_{0z}.g_z }
  { 2 g_{xy} \sqrt{1-s^2_{0z}}}\right]} - \arctan{ g_y/g_x } \]
 
 There are two solutions for the inverse cosine for arguments
