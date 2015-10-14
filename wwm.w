@@ -231,10 +231,10 @@ only the xx, yy and zz terms from the dot product can be non-zero:
 
 \[ \mathbf{ |k|^2 + 2 s_{0x}.k_x + 2 s_{0z}.k_z = 0 } \]
 \[ \mathbf{ 2 s_{0x}.k_x = - |k|^2 - 2 s_{0z}.k_z } \]
-\[ \mathbf{ k_x = - \frac{|k|^2 - 2 s_{0z}.k_z }{ 2 s_{0x}}} \]
-\[ \mathbf{ k_x = - \frac{|k|^2 - 2 s_{0z}.k_z }{ 2 \sqrt{1-s^2_{0z}}}} \]
+\[ \mathbf{ k_x =  \frac{-|k|^2 - 2 s_{0z}.k_z }{ 2 s_{0x}}} \]
+\[ \mathbf{ k_x =  \frac{-|k|^2 - 2 s_{0z}.k_z }{ 2 \sqrt{1-s^2_{0z}}}} \]
 ...via the choice of z along rotation axis then...:
-\[ \mathbf{ k_x = - \frac{|g|^2 - 2 s_{0z}.g_z }{ 2 \sqrt{1-s^2_{0z}}}} \]
+\[ \mathbf{ k_x =  \frac{-|g|^2 - 2 s_{0z}.g_z }{ 2 \sqrt{1-s^2_{0z}}}} \]
 
 If the orientation matrix and beam direction are known we are able to 
 compute the g-vector and ${s0z}$ and we can compute $k_x$.
@@ -1101,7 +1101,8 @@ From the Milch and Minor magic:
         self.fri = np.concatenate((np.ones(g.shape[1]),-np.ones(g.shape[1])))
         self.modg2 = (self.g*self.g).sum(axis=0)
         self.kz = self.g[2,:]
-        num = - (self.modg2 - 2*self.axistilt*self.kz)
+        # EVIL !!!!        num = - (self.modg2 - 2*self.axistilt*self.kz)
+        num = - self.modg2 - 2*self.axistilt*self.kz
         den = 2*np.sqrt( 1 - self.axistilt*self.axistilt )
         # Normally axistilt should be a smallish number
         self.kx = num / den
