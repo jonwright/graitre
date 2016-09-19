@@ -746,6 +746,22 @@ fit them to extract the $\mu t$ and wafer zero angle.
 }
 @}
 
+@O wwmhrz.json
+@{
+{
+    "chanAngle": "CH1",
+    "chanMonit": "CH6",
+    "chanTrans": "CH5",
+    "mut": 0.017244892180296886,
+    "scaleAngle": 160000.0,
+    "scaleMonit": -189161910.72070956,
+    "scaleTrans": -167473298.25006324,
+    "zeroAngle": 0.0,
+    "zeroMonit": 655356.36976666667,
+    "zeroTrans": 471232.09580000001
+}
+@}
+
 \subsection{ Programs }
 
 
